@@ -21,6 +21,7 @@ from framesmith._internal.regex_patterns import (
     WHITESPACE_RUN_PATTERN,
 )
 from framesmith._internal.unicode_maps import ASCII_COMPAT_MAP
+from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
     'collapse_whitespace',
@@ -30,6 +31,7 @@ __all__: list[str] = [
     'remove_apostrophes',
     'remove_periods',
     'replace_ampersand_with_and',
+    'replace_whitespace_with',
     'strip_whitespace',
     'to_snake_case',
 ]
@@ -106,10 +108,57 @@ def remove_periods(expr: pl.Expr) -> pl.Expr:
     return expr.str.replace_all('.', '', literal=True)
 
 
+def replace_whitespace_with(separator: str) -> ExpressionTransform:
+    """Build a transform that replaces each whitespace run with ``separator``.
+
+    Atomic: replaces whitespace runs only. Does NOT strip leading or
+    trailing whitespace, and does NOT collapse non-whitespace
+    characters — those are :func:`strip_whitespace` and
+    :func:`collapse_whitespace`. A leading or trailing whitespace run
+    becomes a separator just like an interior one, so
+    ``' hello world '`` with ``separator='_'`` produces
+    ``'_hello_world_'``. Compose with :func:`strip_whitespace` if you
+    want the pandas-style behavior of stripping ends before replacing
+    interior whitespace.
+
+    Multi-character separators and the empty string are both valid.
+    ``replace_whitespace_with('')`` removes all whitespace.
+
+    Args:
+        separator: The string each whitespace run is replaced with.
+            No default — explicit at every call site.
+
+    Returns:
+        An ``ExpressionTransform``. Applied via ``compose_column``.
+
+    Example:
+        >>> import polars as pl
+        >>> from framesmith import compose_column
+        >>> from framesmith.transforms import replace_whitespace_with
+        >>> df = pl.DataFrame({'x': ['hello world', 'a  b']})
+        >>> kebab = replace_whitespace_with('-')
+        >>> df.with_columns(compose_column('x', [kebab]))['x'].to_list()
+        ['hello-world', 'a-b']
+    """
+
+    def _replace_whitespace(expr: pl.Expr) -> pl.Expr:
+        return expr.str.replace_all(WHITESPACE_RUN_PATTERN, separator)
+
+    return _replace_whitespace
+
+
+# Build the snake_case transform once at module load. The factory is
+# called exactly once; this constant holds the resulting closure.
+_TO_SNAKE_CASE_TRANSFORM: ExpressionTransform = replace_whitespace_with('_')
+
+
 def to_snake_case(expr: pl.Expr) -> pl.Expr:
     """Replace whitespace runs with underscores.
 
-    Does not strip, lowercase, or Unicode-fold. Assumes the input is
-    already normalized if snake_case canonical form is the goal.
+    Convenience wrapper that delegates to
+    ``replace_whitespace_with('_')`` so the whitespace-replacement
+    logic lives in exactly one place. Does not strip, lowercase, or
+    Unicode-fold. Assumes the input is already normalized if
+    snake_case canonical form is the goal.
     """
-    return expr.str.replace_all(WHITESPACE_RUN_PATTERN, '_')
+    return _TO_SNAKE_CASE_TRANSFORM(expr)

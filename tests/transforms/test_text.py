@@ -8,7 +8,8 @@ ambiguity is what the test exercises.
 """
 
 import polars as pl
-from polars.testing import assert_series_equal
+import pytest
+from polars.testing import assert_frame_equal, assert_series_equal
 
 from framesmith import (
     ExpressionTransform,
@@ -23,6 +24,12 @@ from framesmith import (
     strip_whitespace,
     to_snake_case,
 )
+
+# ``replace_whitespace_with`` lives only on the subpackage's public
+# surface during the encapsulation migration; it is intentionally not
+# re-exported from the top-level ``framesmith`` package yet. This dual-
+# path import documents the in-progress retrofit.
+from framesmith.transforms import replace_whitespace_with
 
 
 def _apply(
@@ -196,6 +203,104 @@ class TestToSnakeCase:
     def test_null_propagates(self) -> None:
         result = _apply([None], to_snake_case)
         assert result.to_list() == [None]
+
+    def test_remains_a_named_function_after_refactor(self) -> None:
+        # to_snake_case must stay a named function even though it now
+        # delegates to the factory's closure. If a future refactor
+        # binds it directly to the closure, this fires.
+        assert to_snake_case.__name__ == 'to_snake_case'
+
+    def test_matches_replace_whitespace_with_underscore(self) -> None:
+        # Faithfulness pin for the delegation: to_snake_case(expr) and
+        # replace_whitespace_with('_')(expr) must produce identical
+        # output across a varied input.
+        underscore = replace_whitespace_with('_')
+        inputs = [
+            'hello world',
+            'hello   world',
+            'already_snake_case',
+            ' leading and trailing ',
+            'tabs\tand\nnewlines',
+            None,
+        ]
+        df = pl.DataFrame({'x': inputs}, schema={'x': pl.String})
+        from_snake = df.with_columns(compose_column('x', [to_snake_case]))
+        from_underscore = df.with_columns(compose_column('x', [underscore]))
+        assert_frame_equal(from_snake, from_underscore)
+
+
+class TestReplaceWhitespaceWith:
+    @pytest.mark.parametrize(
+        ('separator', 'expected'),
+        [
+            ('_', 'hello_world'),
+            ('-', 'hello-world'),
+            ('.', 'hello.world'),
+            ('__', 'hello__world'),
+            ('', 'helloworld'),
+            (' ', 'hello world'),
+        ],
+    )
+    def test_separator_variations(
+        self, separator: str, expected: str
+    ) -> None:
+        transform = replace_whitespace_with(separator)
+        result = _apply(['hello world'], transform)
+        assert result.to_list() == [expected]
+
+    def test_multiple_spaces_collapse_to_one_separator(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply(['hello   world'], transform)
+        assert result.to_list() == ['hello_world']
+
+    def test_tab_replaced(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply(['a\tb'], transform)
+        assert result.to_list() == ['a_b']
+
+    def test_newline_replaced(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply(['a\nb'], transform)
+        assert result.to_list() == ['a_b']
+
+    def test_mixed_tabs_and_spaces_collapse_to_one_separator(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply(['a \t b'], transform)
+        assert result.to_list() == ['a_b']
+
+    def test_leading_and_trailing_whitespace_replaced_not_stripped(
+        self,
+    ) -> None:
+        # Atomic-behavior contract: ends become separators just like
+        # interior whitespace.
+        transform = replace_whitespace_with('_')
+        result = _apply([' hello world '], transform)
+        assert result.to_list() == ['_hello_world_']
+
+    def test_no_interior_text_change(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply(['HelloWorld'], transform)
+        assert result.to_list() == ['HelloWorld']
+
+    def test_null_propagates(self) -> None:
+        transform = replace_whitespace_with('_')
+        result = _apply([None], transform)
+        assert result.to_list() == [None]
+
+    def test_factory_returns_callable(self) -> None:
+        transform = replace_whitespace_with('_')
+        assert callable(transform)
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['hello world', 'a  b', ' edges ', None]},
+            schema={'x': pl.String},
+        )
+        transform = replace_whitespace_with('_')
+        expr = compose_column('x', [transform])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
 
 
 class TestNullPropagationBatch:
