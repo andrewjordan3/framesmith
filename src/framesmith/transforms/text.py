@@ -28,6 +28,7 @@ __all__: list[str] = [
     'fold_to_ascii',
     'normalize_unicode_nfkc',
     'nullify_blank_strings',
+    'periods_to_spaces',
     'remove_apostrophes',
     'remove_periods',
     'replace_ampersand_with_and',
@@ -106,6 +107,19 @@ def remove_apostrophes(expr: pl.Expr) -> pl.Expr:
 def remove_periods(expr: pl.Expr) -> pl.Expr:
     """Remove all period characters (``.``)."""
     return expr.str.replace_all('.', '', literal=True)
+
+
+def periods_to_spaces(expr: pl.Expr) -> pl.Expr:
+    """Replace each period with a single space.
+
+    Atomic: one period → one space, even in runs. ``'U.S.A'`` becomes
+    ``'U S A'`` and ``'john..doe'`` becomes ``'john  doe'`` (two
+    spaces). Compose with :func:`collapse_whitespace` downstream if
+    you want repeated dots to collapse to a single space.
+
+    Nulls pass through as null.
+    """
+    return expr.str.replace_all('.', ' ', literal=True)
 
 
 def replace_whitespace_with(separator: str) -> ExpressionTransform:

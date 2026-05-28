@@ -15,10 +15,12 @@ from framesmith.transforms import (
     accounting_parens_to_negative,
     cast_to_float64,
     collapse_whitespace,
+    extract_email_local_part,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
     percent_to_fraction,
+    periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     remove_thousands_separators,
@@ -30,6 +32,7 @@ from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
     'CLEAN_NUMERIC_STRING',
+    'EMAIL_TO_DISPLAY_NAME',
     'NORMALIZE_NUMERIC',
     'NORMALIZE_PERCENT',
     'NORMALIZE_TEXT',
@@ -91,4 +94,17 @@ NORMALIZE_NUMERIC: tuple[ExpressionTransform, ...] = (
 NORMALIZE_PERCENT: tuple[ExpressionTransform, ...] = (
     *CLEAN_NUMERIC_STRING,
     percent_to_fraction,
+)
+
+
+# Extract a human-readable display name from an email address.
+# Strips surrounding whitespace, takes the local part (before the first
+# '@'), replaces periods with spaces, and collapses any resulting
+# whitespace runs so doubled dots don't produce doubled spaces.
+# 'john.doe@example.com' → 'john doe'.
+EMAIL_TO_DISPLAY_NAME: tuple[ExpressionTransform, ...] = (
+    strip_whitespace,
+    extract_email_local_part,
+    periods_to_spaces,
+    collapse_whitespace,
 )

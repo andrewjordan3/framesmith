@@ -10,7 +10,10 @@ from framesmith.transforms.missing import (
     DEFAULT_MISSING_SENTINELS,
     nullify_sentinels,
 )
-from framesmith.transforms.names import remove_jr_suffix
+from framesmith.transforms.names import (
+    extract_email_local_part,
+    remove_jr_suffix,
+)
 from framesmith.transforms.numeric import (
     accounting_parens_to_negative,
     cast_to_float64,
@@ -23,6 +26,7 @@ from framesmith.transforms.text import (
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
@@ -36,11 +40,13 @@ __all__: list[str] = [
     'accounting_parens_to_negative',
     'cast_to_float64',
     'collapse_whitespace',
+    'extract_email_local_part',
     'fold_to_ascii',
     'normalize_unicode_nfkc',
     'nullify_blank_strings',
     'nullify_sentinels',
     'percent_to_fraction',
+    'periods_to_spaces',
     'remove_apostrophes',
     'remove_jr_suffix',
     'remove_periods',

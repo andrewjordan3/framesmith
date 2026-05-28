@@ -17,6 +17,7 @@ from framesmith.transforms import (
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
@@ -181,6 +182,34 @@ class TestRemovePeriods:
         assert result.to_list() == [None]
 
 
+class TestPeriodsToSpaces:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john.doe', 'john doe'),
+            ('U.S.A', 'U S A'),
+            ('no_periods', 'no_periods'),
+            # Atomic: one period → one space, even in runs. No collapse.
+            ('..leading', '  leading'),
+            ('john..doe', 'john  doe'),
+            ('', ''),
+        ],
+    )
+    def test_replaces_each_period_with_one_space(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], periods_to_spaces)
+        assert result.to_list() == [expected]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], periods_to_spaces)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john.doe'], periods_to_spaces)
+        assert result.dtype == pl.String
+
+
 class TestToSnakeCase:
     def test_single_space_becomes_underscore(self) -> None:
         result = _apply(['hello world'], to_snake_case)
@@ -307,6 +336,7 @@ class TestNullPropagationBatch:
             collapse_whitespace,
             strip_whitespace,
             nullify_blank_strings,
+            periods_to_spaces,
             replace_ampersand_with_and,
             remove_apostrophes,
             remove_periods,
