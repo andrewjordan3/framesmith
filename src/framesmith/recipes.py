@@ -11,6 +11,12 @@ UPPERCASE naming signals "reusable predefined sequence," distinct from
 the lowercase transform functions they contain.
 """
 
+from framesmith.transforms.numeric import (
+    accounting_parens_to_negative,
+    cast_to_float64,
+    remove_thousands_separators,
+    trailing_minus_to_prefix,
+)
 from framesmith.transforms.text import (
     collapse_whitespace,
     fold_to_ascii,
@@ -24,6 +30,8 @@ from framesmith.transforms.text import (
 from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
+    'CLEAN_NUMERIC_STRING',
+    'NORMALIZE_NUMERIC',
     'NORMALIZE_TEXT',
     'UNICODE_TO_ASCII',
 ]
@@ -50,4 +58,27 @@ NORMALIZE_TEXT: tuple[ExpressionTransform, ...] = (
     replace_ampersand_with_and,
     remove_apostrophes,
     remove_periods,
+)
+
+
+# Clean a messy numeric/currency string into a bare numeric string
+# ready to cast. Reuses UNICODE_TO_ASCII for NFKC + minus/currency/
+# invisible/whitespace-variant handling, then applies the numeric-
+# specific rewrites. Returns a STRING — cast it yourself if you want a
+# dtype other than Float64 (e.g.
+# ``compose_column(col, CLEAN_NUMERIC_STRING).cast(pl.Int64, strict=False)``).
+CLEAN_NUMERIC_STRING: tuple[ExpressionTransform, ...] = (
+    *UNICODE_TO_ASCII,
+    accounting_parens_to_negative,
+    trailing_minus_to_prefix,
+    remove_thousands_separators,
+)
+
+
+# Full numeric normalization: clean the string, then cast to Float64.
+# Unparseable values become null (no fill — caller decides). Splices
+# CLEAN_NUMERIC_STRING so the cleaning order has one source of truth.
+NORMALIZE_NUMERIC: tuple[ExpressionTransform, ...] = (
+    *CLEAN_NUMERIC_STRING,
+    cast_to_float64,
 )

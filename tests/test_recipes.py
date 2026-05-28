@@ -15,9 +15,12 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from framesmith import (
+    CLEAN_NUMERIC_STRING,
+    NORMALIZE_NUMERIC,
     NORMALIZE_TEXT,
     UNICODE_TO_ASCII,
     ExpressionTransform,
+    cast_to_float64,
     compose_column,
     fold_to_ascii,
     normalize_unicode_nfkc,
@@ -229,3 +232,120 @@ class TestRecipeStructure:
         # this test fires.
         assert NORMALIZE_TEXT[0] is nullify_blank_strings
         assert NORMALIZE_TEXT[1:3] == UNICODE_TO_ASCII
+
+
+# ---------------------------------------------------------------------
+# NORMALIZE_NUMERIC end-to-end
+# ---------------------------------------------------------------------
+
+
+class TestNormalizeNumeric:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('($1,234.56)', -1234.56),
+            ('1,234.56-', -1234.56),
+            # U+2212 MINUS SIGN handled by fold_to_ascii via MINUS_LIKE_MAP.
+            ('−1234', -1234.0),  # noqa: RUF001
+            ('$1,234', 1234.0),
+            ('(1,234)', -1234.0),
+            # Fullwidth digits handled by NFKC.
+            ('１２３', 123.0),  # noqa: RUF001
+        ],
+    )
+    def test_parses_messy_numeric_strings(
+        self, value: str, expected: float
+    ) -> None:
+        result = _apply([value], NORMALIZE_NUMERIC)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize('value', ['', '   ', 'abc'])
+    def test_unparseable_becomes_null(self, value: str) -> None:
+        result = _apply([value], NORMALIZE_NUMERIC)
+        assert result.to_list() == [None]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], NORMALIZE_NUMERIC)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_float64(self) -> None:
+        result = _apply(['123.45'], NORMALIZE_NUMERIC)
+        assert result.dtype == pl.Float64
+
+
+# ---------------------------------------------------------------------
+# CLEAN_NUMERIC_STRING (string output, caller casts)
+# ---------------------------------------------------------------------
+
+
+class TestCleanNumericString:
+    def test_cleans_to_bare_numeric_string(self) -> None:
+        result = _apply(['($1,234.56)'], CLEAN_NUMERIC_STRING)
+        assert result.to_list() == ['-1234.56']
+
+    def test_output_dtype_is_still_string(self) -> None:
+        result = _apply(['($1,234.56)'], CLEAN_NUMERIC_STRING)
+        assert result.dtype == pl.String
+
+    def test_caller_can_cast_to_int64(self) -> None:
+        df = pl.DataFrame({'x': ['1,234']}, schema={'x': pl.String})
+        expr = compose_column('x', CLEAN_NUMERIC_STRING).cast(
+            pl.Int64, strict=False
+        )
+        result = df.with_columns(expr)
+        assert result['x'].dtype == pl.Int64
+        assert result['x'].to_list() == [1234]
+
+
+# ---------------------------------------------------------------------
+# Numeric recipe structure / splice locks
+# ---------------------------------------------------------------------
+
+
+class TestNumericRecipeStructure:
+    def test_normalize_numeric_is_tuple_not_list(self) -> None:
+        assert isinstance(NORMALIZE_NUMERIC, tuple)
+        assert not isinstance(NORMALIZE_NUMERIC, list)
+
+    def test_clean_numeric_string_is_tuple_not_list(self) -> None:
+        assert isinstance(CLEAN_NUMERIC_STRING, tuple)
+        assert not isinstance(CLEAN_NUMERIC_STRING, list)
+
+    def test_normalize_numeric_splices_clean_numeric_string_then_casts(
+        self,
+    ) -> None:
+        # Locks in the splice: NORMALIZE_NUMERIC must be
+        # CLEAN_NUMERIC_STRING followed by cast_to_float64.
+        assert NORMALIZE_NUMERIC[:-1] == CLEAN_NUMERIC_STRING
+        assert NORMALIZE_NUMERIC[-1] is cast_to_float64
+
+    def test_clean_numeric_string_starts_with_unicode_to_ascii(self) -> None:
+        # Locks in the splice: the Unicode handling for numerics is
+        # delegated to UNICODE_TO_ASCII and lives in one place.
+        assert CLEAN_NUMERIC_STRING[:2] == UNICODE_TO_ASCII
+
+
+# ---------------------------------------------------------------------
+# Lazy / eager equivalence for NORMALIZE_NUMERIC
+# ---------------------------------------------------------------------
+
+
+class TestNormalizeNumericLazyEagerEquivalence:
+    def test_normalize_numeric_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    '($1,234.56)',
+                    '1,234.56-',
+                    '$1,234',
+                    '   ',
+                    'abc',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', NORMALIZE_NUMERIC)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
