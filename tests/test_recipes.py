@@ -16,6 +16,7 @@ from polars.testing import assert_frame_equal
 
 from framesmith import (
     CLEAN_NUMERIC_STRING,
+    EMAIL_TO_DISPLAY_NAME,
     NORMALIZE_NUMERIC,
     NORMALIZE_PERCENT,
     NORMALIZE_TEXT,
@@ -27,10 +28,12 @@ from framesmith.transforms import (
     accounting_parens_to_negative,
     cast_to_float64,
     collapse_whitespace,
+    extract_email_local_part,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
     percent_to_fraction,
+    periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     remove_thousands_separators,
@@ -422,6 +425,14 @@ class TestNoSentinelNullificationInDefaultRecipes:
             percent_to_fraction,
         ) == NORMALIZE_PERCENT
 
+    def test_email_to_display_name_contents_pinned(self) -> None:
+        assert (
+            strip_whitespace,
+            extract_email_local_part,
+            periods_to_spaces,
+            collapse_whitespace,
+        ) == EMAIL_TO_DISPLAY_NAME
+
 
 # ---------------------------------------------------------------------
 # NORMALIZE_PERCENT end-to-end
@@ -508,6 +519,91 @@ class TestNormalizePercentLazyEagerEquivalence:
             schema={'x': pl.String},
         )
         expr = compose_column('x', NORMALIZE_PERCENT)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# EMAIL_TO_DISPLAY_NAME end-to-end
+# ---------------------------------------------------------------------
+
+
+class TestEmailToDisplayName:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john@example.com', 'john'),
+            ('john.doe@example.com', 'john doe'),
+            # Leading/trailing whitespace stripped by strip_whitespace.
+            (' jane.q.smith@example.com ', 'jane q smith'),
+            # collapse_whitespace tidies the doubled space from '..'.
+            ('jane..doe@example.com', 'jane doe'),
+            # No '@' → the local-part extractor leaves the value alone;
+            # periods become spaces, then collapse keeps a clean form.
+            ('noatsign', 'noatsign'),
+            ('@example.com', ''),
+            ('', ''),
+        ],
+    )
+    def test_produces_display_name(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], EMAIL_TO_DISPLAY_NAME)
+        assert result.to_list() == [expected]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], EMAIL_TO_DISPLAY_NAME)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john.doe@example.com'], EMAIL_TO_DISPLAY_NAME)
+        assert result.dtype == pl.String
+
+
+# ---------------------------------------------------------------------
+# EMAIL_TO_DISPLAY_NAME structure
+# ---------------------------------------------------------------------
+
+
+class TestEmailToDisplayNameStructure:
+    def test_email_to_display_name_is_tuple_not_list(self) -> None:
+        assert isinstance(EMAIL_TO_DISPLAY_NAME, tuple)
+        assert not isinstance(EMAIL_TO_DISPLAY_NAME, list)
+
+    def test_email_to_display_name_exact_identity(self) -> None:
+        # Locks in the recipe shape: any reorder or insertion fires.
+        assert (
+            strip_whitespace,
+            extract_email_local_part,
+            periods_to_spaces,
+            collapse_whitespace,
+        ) == EMAIL_TO_DISPLAY_NAME
+
+
+# ---------------------------------------------------------------------
+# Lazy / eager equivalence for EMAIL_TO_DISPLAY_NAME
+# ---------------------------------------------------------------------
+
+
+class TestEmailToDisplayNameLazyEagerEquivalence:
+    def test_email_to_display_name_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    'john@example.com',
+                    'john.doe@example.com',
+                    ' jane.q.smith@example.com ',
+                    'jane..doe@example.com',
+                    'noatsign',
+                    '@example.com',
+                    '',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', EMAIL_TO_DISPLAY_NAME)
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)

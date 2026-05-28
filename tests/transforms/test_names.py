@@ -1,11 +1,11 @@
 # tests/transforms/test_names.py
-"""Tests for ``framesmith.transforms.names.remove_jr_suffix``."""
+"""Tests for transforms in ``framesmith.transforms.names``."""
 
 import polars as pl
 import pytest
 
 from framesmith import ExpressionTransform, compose_column
-from framesmith.transforms import remove_jr_suffix
+from framesmith.transforms import extract_email_local_part, remove_jr_suffix
 
 
 def _apply(
@@ -53,3 +53,51 @@ class TestRemoveJrSuffix:
         # collapse_whitespace if tidying is required.
         result = _apply(['John  Smith Jr'], remove_jr_suffix)
         assert result.to_list() == ['John  Smith']
+
+
+class TestExtractEmailLocalPart:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john@example.com', 'john'),
+            # Periods preserved at this stage — that's periods_to_spaces' job.
+            ('john.doe@example.com', 'john.doe'),
+            ('jane.q.smith@example.com', 'jane.q.smith'),
+        ],
+    )
+    def test_takes_part_before_first_at(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], extract_email_local_part)
+        assert result.to_list() == [expected]
+
+    def test_no_at_sign_unchanged(self) -> None:
+        result = _apply(['noatsign'], extract_email_local_part)
+        assert result.to_list() == ['noatsign']
+
+    def test_leading_at_yields_empty_string(self) -> None:
+        result = _apply(['@example.com'], extract_email_local_part)
+        assert result.to_list() == ['']
+
+    def test_multiple_at_signs_split_on_first(self) -> None:
+        # Matches the pandas reference: str.split('@', n=1).str[0].
+        result = _apply(['john@host@subhost'], extract_email_local_part)
+        assert result.to_list() == ['john']
+
+    def test_empty_string_unchanged(self) -> None:
+        result = _apply([''], extract_email_local_part)
+        assert result.to_list() == ['']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], extract_email_local_part)
+        assert result.to_list() == [None]
+
+    def test_does_not_strip_surrounding_whitespace(self) -> None:
+        # Atomic-contract proof: whitespace is preserved verbatim in
+        # the local part. Compose strip_whitespace upstream if needed.
+        result = _apply([' padded@example.com'], extract_email_local_part)
+        assert result.to_list() == [' padded']
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john@example.com'], extract_email_local_part)
+        assert result.dtype == pl.String
