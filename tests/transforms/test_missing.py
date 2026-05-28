@@ -5,13 +5,8 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from framesmith import (
-    DEFAULT_MISSING_SENTINELS,
-    NORMALIZE_TEXT,
-    ExpressionTransform,
-    compose_column,
-    nullify_sentinels,
-)
+from framesmith import NORMALIZE_TEXT, ExpressionTransform, compose_column
+from framesmith.transforms import DEFAULT_MISSING_SENTINELS, nullify_sentinels
 
 
 def _apply(

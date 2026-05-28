@@ -15,7 +15,7 @@ formats (``1.234,56``) are out of scope.
 
 import polars as pl
 
-from framesmith._internal.regex_patterns import (
+from framesmith._internal import (
     PAREN_NEGATIVE_PATTERN,
     THOUSANDS_SEPARATOR_PATTERN,
     TRAILING_MINUS_PATTERN,

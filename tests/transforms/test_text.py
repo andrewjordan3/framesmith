@@ -11,25 +11,19 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal, assert_series_equal
 
-from framesmith import (
-    ExpressionTransform,
+from framesmith import ExpressionTransform, compose_column
+from framesmith.transforms import (
     collapse_whitespace,
-    compose_column,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
+    replace_whitespace_with,
     strip_whitespace,
     to_snake_case,
 )
-
-# ``replace_whitespace_with`` lives only on the subpackage's public
-# surface during the encapsulation migration; it is intentionally not
-# re-exported from the top-level ``framesmith`` package yet. This dual-
-# path import documents the in-progress retrofit.
-from framesmith.transforms import replace_whitespace_with
 
 
 def _apply(

@@ -11,11 +11,13 @@ structure (``dates.py``, etc.) is private. Import from
 """
 
 from framesmith.filters.dates import (
+    PeriodInterval,
     within_complete_month,
     within_complete_period,
 )
 
 __all__: list[str] = [
+    'PeriodInterval',
     'within_complete_month',
     'within_complete_period',
 ]

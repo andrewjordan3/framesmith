@@ -8,11 +8,10 @@ the tests also cover the integration point.
 import polars as pl
 import pytest
 
-from framesmith import (
-    ExpressionTransform,
+from framesmith import ExpressionTransform, compose_column
+from framesmith.transforms import (
     accounting_parens_to_negative,
     cast_to_float64,
-    compose_column,
     percent_to_fraction,
     remove_thousands_separators,
     trailing_minus_to_prefix,

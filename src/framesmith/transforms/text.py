@@ -16,11 +16,11 @@ not fold to ASCII. Compose them through a recipe (see
 
 import polars as pl
 
-from framesmith._internal.regex_patterns import (
+from framesmith._internal import (
+    ASCII_COMPAT_MAP,
     BLANK_OR_WHITESPACE_ONLY_PATTERN,
     WHITESPACE_RUN_PATTERN,
 )
-from framesmith._internal.unicode_maps import ASCII_COMPAT_MAP
 from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
