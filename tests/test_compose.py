@@ -2,8 +2,9 @@
 """Tests for ``framesmith.compose.compose_column``.
 
 These tests use inline, module-level transforms only. They do not
-import any transforms from ``framesmith.columns`` — those modules are
-slated to change and the composition layer must stand on its own.
+import from ``framesmith.transforms`` or ``framesmith.recipes`` — the
+composition layer is meant to stand on its own, decoupled from any
+specific library of transforms.
 """
 
 from collections.abc import Sequence
@@ -34,7 +35,7 @@ def to_lowercase(expr: pl.Expr) -> pl.Expr:
 
 
 def prepend_marker(expr: pl.Expr) -> pl.Expr:
-    return pl.lit('X-') + expr
+    return pl.lit('x-') + expr
 
 
 def self_aliasing_transform(expr: pl.Expr) -> pl.Expr:
@@ -76,16 +77,17 @@ class TestSingleTransform:
 class TestMultipleTransforms:
     def test_applies_in_order(self) -> None:
         df = pl.DataFrame({'x': ['abc']})
-        # Order: uppercase first, then prepend → 'X-ABC'
+        # Order: uppercase first, then prepend → 'x-ABC' (the lowercase
+        # marker is added AFTER uppercasing, so it survives unchanged).
         result = df.with_columns(
             compose_column('x', [to_uppercase, prepend_marker])
         )
-        assert result['x'].to_list() == ['X-ABC']
+        assert result['x'].to_list() == ['x-ABC']
 
     def test_reversed_order_produces_different_result(self) -> None:
         df = pl.DataFrame({'x': ['abc']})
-        # Order: prepend first, then uppercase → 'X-ABC' (because
-        # uppercasing 'X-abc' yields 'X-ABC')
+        # Order: prepend first, then uppercase → 'X-ABC' (uppercasing
+        # 'x-abc' uppercases the marker too).
         result = df.with_columns(
             compose_column('x', [prepend_marker, to_uppercase])
         )
