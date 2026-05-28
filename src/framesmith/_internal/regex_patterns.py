@@ -3,8 +3,8 @@
 Shared regex pattern strings for text-processing expressions.
 
 Centralizes the regular-expression strings used across framesmith's
-column-level normalization modules so each pattern has a single source
-of truth. Two consumers (e.g. ``columns/text.py`` and ``columns/names.py``)
+transform modules so each pattern has a single source of truth. Two
+consumers (e.g. ``transforms/text.py`` and ``transforms/names.py``)
 that need the same whitespace pattern import the same constant instead
 of redefining it.
 
@@ -21,7 +21,10 @@ polars' regex strings do not take a separate flags argument.
 
 __all__: list[str] = [
     'BLANK_OR_WHITESPACE_ONLY_PATTERN',
+    'PAREN_NEGATIVE_PATTERN',
+    'THOUSANDS_SEPARATOR_PATTERN',
     'TRAILING_JR_PATTERN',
+    'TRAILING_MINUS_PATTERN',
     'WHITESPACE_RUN_PATTERN',
 ]
 
@@ -38,3 +41,22 @@ BLANK_OR_WHITESPACE_ONLY_PATTERN: str = r'^\s*$'
 # whitespace. The inline ``(?i)`` flag makes the match case-insensitive,
 # since polars regex strings do not accept a separate ``flags`` argument.
 TRAILING_JR_PATTERN: str = r'(?i)(?:[, ]+)?jr\.?$'
+
+# Accounting-style parenthesized negative: ``"(123.45)"``,
+# ``"( $1,234.56 )"``. Anchored to the whole value; captures the content
+# between the outermost parens in group 1, with optional whitespace
+# adjacent to the parens consumed by the pattern (so the captured body
+# has no parens-adjacent whitespace).
+PAREN_NEGATIVE_PATTERN: str = r'^\s*\(\s*(.+?)\s*\)\s*$'
+
+# Trailing minus (SAP / AS-400 / mainframe convention): ``"1,234.56-"``.
+# Anchored. The first character must be non-minus so an already-leading-
+# minus value (``"-100"``) is not double-negated. Body captured in
+# group 1.
+TRAILING_MINUS_PATTERN: str = r'^([^-].+)-$'
+
+# Digit-group separators: a comma or any whitespace character. Used to
+# strip thousands separators (and incidentally any surrounding
+# whitespace) before casting. As a character class, ``,`` and ``\s``
+# are atomic; no escaping needed.
+THOUSANDS_SEPARATOR_PATTERN: str = r'[,\s]'
