@@ -20,12 +20,20 @@ from framesmith import (
     NORMALIZE_TEXT,
     UNICODE_TO_ASCII,
     ExpressionTransform,
+    accounting_parens_to_negative,
     cast_to_float64,
+    collapse_whitespace,
     compose_column,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    remove_apostrophes,
+    remove_periods,
+    remove_thousands_separators,
+    replace_ampersand_with_and,
+    strip_whitespace,
     to_snake_case,
+    trailing_minus_to_prefix,
 )
 
 
@@ -349,3 +357,53 @@ class TestNormalizeNumericLazyEagerEquivalence:
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# Opt-in guard: shipped recipes must NOT include sentinel nullification
+# ---------------------------------------------------------------------
+
+
+class TestNoSentinelNullificationInDefaultRecipes:
+    """Regression guard for the opt-in property of ``nullify_sentinels``.
+
+    Sentinel handling depends on the data source — defaulting it on
+    would silently null valid values (e.g. ``'NA'`` as Namibia). These
+    tests pin the exact transforms in each shipped recipe so a future
+    edit that slips ``nullify_sentinels`` (or any unexpected transform)
+    into a default recipe fires immediately.
+    """
+
+    def test_normalize_text_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            collapse_whitespace,
+            strip_whitespace,
+            replace_ampersand_with_and,
+            remove_apostrophes,
+            remove_periods,
+        ) == NORMALIZE_TEXT
+
+    def test_clean_numeric_string_contents_pinned(self) -> None:
+        assert (
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            accounting_parens_to_negative,
+            trailing_minus_to_prefix,
+            remove_thousands_separators,
+        ) == CLEAN_NUMERIC_STRING
+
+    def test_normalize_numeric_contents_pinned(self) -> None:
+        assert (
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            accounting_parens_to_negative,
+            trailing_minus_to_prefix,
+            remove_thousands_separators,
+            cast_to_float64,
+        ) == NORMALIZE_NUMERIC
+
+    def test_unicode_to_ascii_contents_pinned(self) -> None:
+        assert (normalize_unicode_nfkc, fold_to_ascii) == UNICODE_TO_ASCII
