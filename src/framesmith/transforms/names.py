@@ -3,7 +3,7 @@
 
 import polars as pl
 
-from framesmith._internal.regex_patterns import TRAILING_JR_PATTERN
+from framesmith._internal import TRAILING_JR_PATTERN
 
 __all__: list[str] = [
     'remove_jr_suffix',

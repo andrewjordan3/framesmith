@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from framesmith._internal.regex_patterns import (
+from framesmith._internal import (
     BLANK_OR_WHITESPACE_ONLY_PATTERN,
     TRAILING_JR_PATTERN,
     WHITESPACE_RUN_PATTERN,

@@ -4,7 +4,8 @@
 import polars as pl
 import pytest
 
-from framesmith import ExpressionTransform, compose_column, remove_jr_suffix
+from framesmith import ExpressionTransform, compose_column
+from framesmith.transforms import remove_jr_suffix
 
 
 def _apply(

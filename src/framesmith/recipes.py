@@ -11,22 +11,20 @@ UPPERCASE naming signals "reusable predefined sequence," distinct from
 the lowercase transform functions they contain.
 """
 
-from framesmith.transforms.numeric import (
+from framesmith.transforms import (
     accounting_parens_to_negative,
     cast_to_float64,
-    percent_to_fraction,
-    remove_thousands_separators,
-    trailing_minus_to_prefix,
-)
-from framesmith.transforms.text import (
     collapse_whitespace,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    percent_to_fraction,
     remove_apostrophes,
     remove_periods,
+    remove_thousands_separators,
     replace_ampersand_with_and,
     strip_whitespace,
+    trailing_minus_to_prefix,
 )
 from framesmith.types import ExpressionTransform
 

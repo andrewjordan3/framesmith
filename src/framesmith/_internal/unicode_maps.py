@@ -8,19 +8,21 @@ modules. Each map is a dict[str, str] suitable for composing into a
 
 Consumers compose what they need from the individual maps:
 
-    # numeric_series.py — only needs minus + invisible
+    # Hypothetical caller that wants only minus + invisible: import the
+    # sub-maps directly from this file (they are file-level public but
+    # not part of the ``framesmith._internal`` directory surface).
     from framesmith._internal.unicode_maps import (
-        MINUS_LIKE_MAP,
         INVISIBLE_CHAR_MAP,
+        MINUS_LIKE_MAP,
     )
     _NUMERIC_TRANSLATION_TABLE = str.maketrans(
         {**MINUS_LIKE_MAP, **INVISIBLE_CHAR_MAP}
     )
 
-    # normalize_series.py — needs the full superset
-    from truck_revenue.preprocessing.unicode_maps import (
-        ASCII_COMPAT_MAP,
-    )
+    # Full superset: ``ASCII_COMPAT_MAP`` is re-exported from the
+    # ``framesmith._internal`` directory init, so this is the supported
+    # cross-directory import path.
+    from framesmith._internal import ASCII_COMPAT_MAP
     _ASCII_TRANSLATION_TABLE = str.maketrans(ASCII_COMPAT_MAP)
 
 Map categories:
