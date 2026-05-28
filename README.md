@@ -1,6 +1,12 @@
 # framesmith
 
-Composable, expression-first preprocessing for polars DataFrames.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![Polars](https://img.shields.io/badge/polars-1.0%2B-CD792C.svg)](https://pola.rs)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/andrewjordan3/framesmith)
+
+A preprocessing library for cleaning messy data in polars DataFrames.
+Composable atomic transforms, declarative recipes, expression-first design.
 
 ## Status
 
