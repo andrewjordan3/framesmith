@@ -24,6 +24,7 @@ from framesmith._internal.regex_patterns import (
 __all__: list[str] = [
     'accounting_parens_to_negative',
     'cast_to_float64',
+    'percent_to_fraction',
     'remove_thousands_separators',
     'trailing_minus_to_prefix',
 ]
@@ -77,3 +78,28 @@ def cast_to_float64(expr: pl.Expr) -> pl.Expr:
     nulls; null handling is the caller's decision.
     """
     return expr.cast(pl.Float64, strict=False)
+
+
+def percent_to_fraction(expr: pl.Expr) -> pl.Expr:
+    """Parse a possibly-percent-formatted string as a ``Float64`` fraction.
+
+    A trailing ``%`` is detected and stripped, the remainder is cast to
+    ``Float64`` with ``strict=False``, and the result is divided by 100
+    when the ``%`` was present. Inputs without ``%`` are cast normally:
+    ``'12'`` → ``12.0``, ``'12%'`` → ``0.12``.
+
+    Bundles three operations (detect ``%``, strip, cast + optional
+    divide) into one transform because they cannot be separated cleanly
+    in a single-column polars pipeline — the "was ``%`` present?"
+    signal cannot survive between sibling transforms.
+
+    Assumes pre-cleaned input. Standalone use on whitespace-padded or
+    comma-containing strings will mis-parse; in the recipe context
+    ``CLEAN_NUMERIC_STRING`` runs first and normalizes both.
+    Unparseable strings (including bare ``'%'`` and the empty string)
+    become null. Nulls pass through unchanged.
+    """
+    has_percent: pl.Expr = expr.str.ends_with('%')
+    without_percent: pl.Expr = expr.str.strip_suffix('%')
+    casted: pl.Expr = without_percent.cast(pl.Float64, strict=False)
+    return pl.when(has_percent).then(casted / 100).otherwise(casted)

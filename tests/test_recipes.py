@@ -17,6 +17,7 @@ from polars.testing import assert_frame_equal
 from framesmith import (
     CLEAN_NUMERIC_STRING,
     NORMALIZE_NUMERIC,
+    NORMALIZE_PERCENT,
     NORMALIZE_TEXT,
     UNICODE_TO_ASCII,
     ExpressionTransform,
@@ -27,6 +28,7 @@ from framesmith import (
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    percent_to_fraction,
     remove_apostrophes,
     remove_periods,
     remove_thousands_separators,
@@ -407,3 +409,103 @@ class TestNoSentinelNullificationInDefaultRecipes:
 
     def test_unicode_to_ascii_contents_pinned(self) -> None:
         assert (normalize_unicode_nfkc, fold_to_ascii) == UNICODE_TO_ASCII
+
+    def test_normalize_percent_contents_pinned(self) -> None:
+        assert (
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            accounting_parens_to_negative,
+            trailing_minus_to_prefix,
+            remove_thousands_separators,
+            percent_to_fraction,
+        ) == NORMALIZE_PERCENT
+
+
+# ---------------------------------------------------------------------
+# NORMALIZE_PERCENT end-to-end
+# ---------------------------------------------------------------------
+
+
+class TestNormalizePercent:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('12%', 0.12),
+            # Accounting parens around percent: parens-to-minus runs,
+            # then '%' survives, then percent_to_fraction handles it.
+            ('(12%)', -0.12),
+            # Commas removed by remove_thousands_separators.
+            ('1,234%', 12.34),
+            # Whitespace removed by remove_thousands_separators.
+            (' 50% ', 0.5),
+            # U+2212 MINUS SIGN normalized via UNICODE_TO_ASCII.
+            ('−50%', -0.5),  # noqa: RUF001
+            # No '%' present — cast to its raw numeric value.
+            ('50', 50.0),
+        ],
+    )
+    def test_parses_messy_percent_strings(
+        self, value: str, expected: float
+    ) -> None:
+        result = _apply([value], NORMALIZE_PERCENT)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize('value', ['abc%', ''])
+    def test_unparseable_becomes_null(self, value: str) -> None:
+        result = _apply([value], NORMALIZE_PERCENT)
+        assert result.to_list() == [None]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], NORMALIZE_PERCENT)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_float64(self) -> None:
+        result = _apply(['12%'], NORMALIZE_PERCENT)
+        assert result.dtype == pl.Float64
+
+
+# ---------------------------------------------------------------------
+# NORMALIZE_PERCENT structure / splice locks
+# ---------------------------------------------------------------------
+
+
+class TestNormalizePercentStructure:
+    def test_normalize_percent_is_tuple_not_list(self) -> None:
+        assert isinstance(NORMALIZE_PERCENT, tuple)
+        assert not isinstance(NORMALIZE_PERCENT, list)
+
+    def test_normalize_percent_splices_clean_numeric_string_then_percent(
+        self,
+    ) -> None:
+        # Locks in the splice: NORMALIZE_PERCENT must be
+        # CLEAN_NUMERIC_STRING followed by percent_to_fraction.
+        assert NORMALIZE_PERCENT[:-1] == CLEAN_NUMERIC_STRING
+        assert NORMALIZE_PERCENT[-1] is percent_to_fraction
+
+
+# ---------------------------------------------------------------------
+# Lazy / eager equivalence for NORMALIZE_PERCENT
+# ---------------------------------------------------------------------
+
+
+class TestNormalizePercentLazyEagerEquivalence:
+    def test_normalize_percent_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    '12%',
+                    '(12%)',
+                    '1,234%',
+                    ' 50% ',
+                    '50',
+                    'abc%',
+                    '',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', NORMALIZE_PERCENT)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
