@@ -14,6 +14,7 @@ the lowercase transform functions they contain.
 from framesmith.transforms.numeric import (
     accounting_parens_to_negative,
     cast_to_float64,
+    percent_to_fraction,
     remove_thousands_separators,
     trailing_minus_to_prefix,
 )
@@ -32,6 +33,7 @@ from framesmith.types import ExpressionTransform
 __all__: list[str] = [
     'CLEAN_NUMERIC_STRING',
     'NORMALIZE_NUMERIC',
+    'NORMALIZE_PERCENT',
     'NORMALIZE_TEXT',
     'UNICODE_TO_ASCII',
 ]
@@ -81,4 +83,14 @@ CLEAN_NUMERIC_STRING: tuple[ExpressionTransform, ...] = (
 NORMALIZE_NUMERIC: tuple[ExpressionTransform, ...] = (
     *CLEAN_NUMERIC_STRING,
     cast_to_float64,
+)
+
+
+# Parse a possibly-messy percent string into a Float64 fraction.
+# Cleans the string via CLEAN_NUMERIC_STRING (handles unicode minus,
+# accounting parens, trailing minus, commas/whitespace), then strips
+# the optional '%' and casts. '50%' → 0.5; '(12%)' → -0.12.
+NORMALIZE_PERCENT: tuple[ExpressionTransform, ...] = (
+    *CLEAN_NUMERIC_STRING,
+    percent_to_fraction,
 )

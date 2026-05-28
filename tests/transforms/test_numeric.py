@@ -6,12 +6,14 @@ the tests also cover the integration point.
 """
 
 import polars as pl
+import pytest
 
 from framesmith import (
     ExpressionTransform,
     accounting_parens_to_negative,
     cast_to_float64,
     compose_column,
+    percent_to_fraction,
     remove_thousands_separators,
     trailing_minus_to_prefix,
 )
@@ -141,4 +143,38 @@ class TestCastToFloat64:
 
     def test_output_dtype_is_float64(self) -> None:
         result = _apply(['123.45'], cast_to_float64)
+        assert result.dtype == pl.Float64
+
+
+class TestPercentToFraction:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('12%', 0.12),
+            ('50%', 0.5),
+            ('100%', 1.0),
+            ('0%', 0.0),
+            ('-50%', -0.5),
+            ('12.5%', 0.125),
+            ('12', 12.0),
+            ('-12', -12.0),
+        ],
+    )
+    def test_parses_percent_and_bare_numbers(
+        self, value: str, expected: float
+    ) -> None:
+        result = _apply([value], percent_to_fraction)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize('value', ['', '%', 'abc', 'abc%'])
+    def test_unparseable_becomes_null(self, value: str) -> None:
+        result = _apply([value], percent_to_fraction)
+        assert result.to_list() == [None]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], percent_to_fraction)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_float64(self) -> None:
+        result = _apply(['12%'], percent_to_fraction)
         assert result.dtype == pl.Float64
