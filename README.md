@@ -68,7 +68,7 @@ normalize_and_snake = (*fs.NORMALIZE_TEXT, to_snake_case)
 df_snake = raw.with_columns(
     fs.compose_column('customer_name', normalize_and_snake)
 )
-# 'OBrien and Co' becomes 'OBrien_and_Co', etc.
+# 'OBrien and Co' becomes 'obrien_and_co', etc.
 ```
 
 ## Installation

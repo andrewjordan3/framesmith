@@ -6,6 +6,14 @@ organization (``text.py``, ``names.py``, ``numeric.py``, ``missing.py``)
 is private — callers import from ``framesmith.transforms``.
 """
 
+from framesmith.transforms.addresses import (
+    standardize_state,
+    strip_trailing_state,
+)
+from framesmith.transforms.categorical import (
+    collapse_keep_top_n,
+    collapse_rare_by_count,
+)
 from framesmith.transforms.missing import (
     DEFAULT_MISSING_SENTINELS,
     nullify_sentinels,
@@ -32,6 +40,7 @@ from framesmith.transforms.text import (
     replace_ampersand_with_and,
     replace_whitespace_with,
     strip_whitespace,
+    to_lowercase,
     to_snake_case,
 )
 
@@ -39,6 +48,8 @@ __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
     'accounting_parens_to_negative',
     'cast_to_float64',
+    'collapse_keep_top_n',
+    'collapse_rare_by_count',
     'collapse_whitespace',
     'extract_email_local_part',
     'fold_to_ascii',
@@ -53,7 +64,10 @@ __all__: list[str] = [
     'remove_thousands_separators',
     'replace_ampersand_with_and',
     'replace_whitespace_with',
+    'standardize_state',
+    'strip_trailing_state',
     'strip_whitespace',
+    'to_lowercase',
     'to_snake_case',
     'trailing_minus_to_prefix',
 ]
