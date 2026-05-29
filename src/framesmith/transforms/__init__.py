@@ -30,6 +30,7 @@ from framesmith.transforms.numeric import (
     trailing_minus_to_prefix,
 )
 from framesmith.transforms.text import (
+    apply_replacements,
     collapse_whitespace,
     fold_to_ascii,
     normalize_unicode_nfkc,
@@ -42,11 +43,14 @@ from framesmith.transforms.text import (
     strip_whitespace,
     to_lowercase,
     to_snake_case,
+    to_titlecase,
+    underscores_to_spaces,
 )
 
 __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
     'accounting_parens_to_negative',
+    'apply_replacements',
     'cast_to_float64',
     'collapse_keep_top_n',
     'collapse_rare_by_count',
@@ -69,5 +73,7 @@ __all__: list[str] = [
     'strip_whitespace',
     'to_lowercase',
     'to_snake_case',
+    'to_titlecase',
     'trailing_minus_to_prefix',
+    'underscores_to_spaces',
 ]

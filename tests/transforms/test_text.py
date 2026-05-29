@@ -13,6 +13,7 @@ from polars.testing import assert_frame_equal, assert_series_equal
 
 from framesmith import ExpressionTransform, compose_column
 from framesmith.transforms import (
+    apply_replacements,
     collapse_whitespace,
     fold_to_ascii,
     normalize_unicode_nfkc,
@@ -25,6 +26,8 @@ from framesmith.transforms import (
     strip_whitespace,
     to_lowercase,
     to_snake_case,
+    to_titlecase,
+    underscores_to_spaces,
 )
 
 
@@ -360,6 +363,96 @@ class TestReplaceWhitespaceWith:
         assert_frame_equal(eager, lazy)
 
 
+class TestToTitlecase:
+    def test_lowercase_words_titlecased(self) -> None:
+        result = _apply(['john smith'], to_titlecase)
+        assert result.to_list() == ['John Smith']
+
+    def test_all_caps_titlecased(self) -> None:
+        result = _apply(['JANE DOE'], to_titlecase)
+        assert result.to_list() == ['Jane Doe']
+
+    def test_acronym_not_fixed(self) -> None:
+        # Documents the known limit: title casing lowercases the tail of
+        # each word, so acronyms are mangled. apply_replacements fixes it.
+        result = _apply(['rep lob'], to_titlecase)
+        assert result.to_list() == ['Rep Lob']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], to_titlecase)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john smith'], to_titlecase)
+        assert result.dtype == pl.String
+
+
+class TestUnderscoresToSpaces:
+    def test_single_underscore_becomes_space(self) -> None:
+        result = _apply(['john_smith'], underscores_to_spaces)
+        assert result.to_list() == ['john smith']
+
+    def test_runs_preserved_not_collapsed(self) -> None:
+        # Atomic: one underscore → one space, even in runs.
+        result = _apply(['a__b'], underscores_to_spaces)
+        assert result.to_list() == ['a  b']
+
+    def test_no_underscores_unchanged(self) -> None:
+        result = _apply(['plain text'], underscores_to_spaces)
+        assert result.to_list() == ['plain text']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], underscores_to_spaces)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john_smith'], underscores_to_spaces)
+        assert result.dtype == pl.String
+
+
+class TestApplyReplacements:
+    def test_single_replacement(self) -> None:
+        transform = apply_replacements({'Lob': 'LOB'})
+        result = _apply(['Primary Lob'], transform)
+        assert result.to_list() == ['Primary LOB']
+
+    def test_multiple_keys(self) -> None:
+        transform = apply_replacements({'Lob': 'LOB', 'Ccms': 'CCMS'})
+        result = _apply(['Ccms Lob'], transform)
+        assert result.to_list() == ['CCMS LOB']
+
+    def test_substring_over_match_documented(self) -> None:
+        # Literal substring, not word-boundary: 'Lob' inside 'Lobster'
+        # is rewritten too. This is the documented caveat.
+        transform = apply_replacements({'Lob': 'LOB'})
+        result = _apply(['Lobster'], transform)
+        assert result.to_list() == ['LOBster']
+
+    def test_empty_map_raises(self) -> None:
+        with pytest.raises(
+            ValueError, match='replacements must not be empty'
+        ):
+            apply_replacements({})
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(apply_replacements({'a': 'b'}))
+
+    def test_null_propagates(self) -> None:
+        transform = apply_replacements({'Lob': 'LOB'})
+        result = _apply([None], transform)
+        assert result.to_list() == [None]
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['Primary Lob', 'Lobster', None]}, schema={'x': pl.String}
+        )
+        transform = apply_replacements({'Lob': 'LOB'})
+        expr = compose_column('x', [transform])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
 class TestNullPropagationBatch:
     """Batch null propagation across every transform."""
 
@@ -376,6 +469,9 @@ class TestNullPropagationBatch:
             remove_periods,
             to_lowercase,
             to_snake_case,
+            to_titlecase,
+            underscores_to_spaces,
+            apply_replacements({'x': 'y'}),
         ]
         expected = pl.Series('x', [None], dtype=pl.String)
         for transform in transforms:

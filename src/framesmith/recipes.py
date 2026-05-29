@@ -26,7 +26,9 @@ from framesmith.transforms import (
     remove_thousands_separators,
     replace_ampersand_with_and,
     strip_whitespace,
+    to_titlecase,
     trailing_minus_to_prefix,
+    underscores_to_spaces,
 )
 from framesmith.types import ExpressionTransform
 
@@ -36,6 +38,7 @@ __all__: list[str] = [
     'NORMALIZE_NUMERIC',
     'NORMALIZE_PERCENT',
     'NORMALIZE_TEXT',
+    'SNAKE_TO_TITLE',
     'UNICODE_TO_ASCII',
 ]
 
@@ -107,4 +110,15 @@ EMAIL_TO_DISPLAY_NAME: tuple[ExpressionTransform, ...] = (
     extract_email_local_part,
     periods_to_spaces,
     collapse_whitespace,
+)
+
+
+# snake_case identifier → human Title Case label. Underscores become
+# spaces, then each word is title-cased. Title casing mangles acronyms
+# ('primary_lob' → 'Primary Lob'); splice apply_replacements to fix
+# specific tokens, e.g.
+# (*SNAKE_TO_TITLE, apply_replacements({'Lob': 'LOB'})).
+SNAKE_TO_TITLE: tuple[ExpressionTransform, ...] = (
+    underscores_to_spaces,
+    to_titlecase,
 )

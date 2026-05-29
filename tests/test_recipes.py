@@ -24,8 +24,10 @@ from framesmith import (
     ExpressionTransform,
     compose_column,
 )
+from framesmith.recipes import SNAKE_TO_TITLE
 from framesmith.transforms import (
     accounting_parens_to_negative,
+    apply_replacements,
     cast_to_float64,
     collapse_whitespace,
     extract_email_local_part,
@@ -40,7 +42,9 @@ from framesmith.transforms import (
     replace_ampersand_with_and,
     strip_whitespace,
     to_snake_case,
+    to_titlecase,
     trailing_minus_to_prefix,
+    underscores_to_spaces,
 )
 
 
@@ -433,6 +437,9 @@ class TestNoSentinelNullificationInDefaultRecipes:
             collapse_whitespace,
         ) == EMAIL_TO_DISPLAY_NAME
 
+    def test_snake_to_title_contents_pinned(self) -> None:
+        assert (underscores_to_spaces, to_titlecase) == SNAKE_TO_TITLE
+
 
 # ---------------------------------------------------------------------
 # NORMALIZE_PERCENT end-to-end
@@ -607,3 +614,35 @@ class TestEmailToDisplayNameLazyEagerEquivalence:
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# SNAKE_TO_TITLE end-to-end, structure, and splice
+# ---------------------------------------------------------------------
+
+
+class TestSnakeToTitle:
+    def test_produces_title_label(self) -> None:
+        result = _apply(['john_smith', 'jane_doe'], SNAKE_TO_TITLE)
+        assert result.to_list() == ['John Smith', 'Jane Doe']
+
+    def test_is_tuple_not_list(self) -> None:
+        assert isinstance(SNAKE_TO_TITLE, tuple)
+        assert not isinstance(SNAKE_TO_TITLE, list)
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['john_smith', 'jane_doe', 'primary_lob', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', SNAKE_TO_TITLE)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+    def test_splice_with_apply_replacements_fixes_acronym(self) -> None:
+        # The snake_to_display equivalent: title-case, then fix the
+        # mangled acronym token in place.
+        recipe = (*SNAKE_TO_TITLE, apply_replacements({'Lob': 'LOB'}))
+        result = _apply(['primary_lob', 'rep_lob'], recipe)
+        assert result.to_list() == ['Primary LOB', 'Rep LOB']
