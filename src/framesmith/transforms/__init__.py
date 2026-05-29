@@ -10,6 +10,10 @@ from framesmith.transforms.addresses import (
     standardize_state,
     strip_trailing_state,
 )
+from framesmith.transforms.categorical import (
+    collapse_keep_top_n,
+    collapse_rare_by_count,
+)
 from framesmith.transforms.missing import (
     DEFAULT_MISSING_SENTINELS,
     nullify_sentinels,
@@ -44,6 +48,8 @@ __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
     'accounting_parens_to_negative',
     'cast_to_float64',
+    'collapse_keep_top_n',
+    'collapse_rare_by_count',
     'collapse_whitespace',
     'extract_email_local_part',
     'fold_to_ascii',
