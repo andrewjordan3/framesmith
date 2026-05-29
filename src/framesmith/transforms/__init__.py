@@ -8,6 +8,7 @@ is private — callers import from ``framesmith.transforms``.
 
 from framesmith.transforms.addresses import (
     standardize_state,
+    standardize_state_name,
     strip_trailing_state,
 )
 from framesmith.transforms.categorical import (
@@ -69,6 +70,7 @@ __all__: list[str] = [
     'replace_ampersand_with_and',
     'replace_whitespace_with',
     'standardize_state',
+    'standardize_state_name',
     'strip_trailing_state',
     'strip_whitespace',
     'to_lowercase',
