@@ -7,6 +7,12 @@ expression. Public surface is exported here; internal file layout
 (``resolve.py``) is private — import from ``framesmith.group``.
 """
 
-from framesmith.group.resolve import first_non_null_per_group
+from framesmith.group.resolve import (
+    first_non_null_per_group,
+    mode_then_first_per_group,
+)
 
-__all__: list[str] = ['first_non_null_per_group']
+__all__: list[str] = [
+    'first_non_null_per_group',
+    'mode_then_first_per_group',
+]
