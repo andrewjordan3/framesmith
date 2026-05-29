@@ -24,6 +24,7 @@ from framesmith._internal import (
 from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
+    'apply_replacements',
     'collapse_whitespace',
     'fold_to_ascii',
     'normalize_unicode_nfkc',
@@ -36,6 +37,8 @@ __all__: list[str] = [
     'strip_whitespace',
     'to_lowercase',
     'to_snake_case',
+    'to_titlecase',
+    'underscores_to_spaces',
 ]
 
 
@@ -123,6 +126,18 @@ def periods_to_spaces(expr: pl.Expr) -> pl.Expr:
     return expr.str.replace_all('.', ' ', literal=True)
 
 
+def underscores_to_spaces(expr: pl.Expr) -> pl.Expr:
+    """Replace each underscore with a single space.
+
+    Atomic: one underscore → one space, even in runs. ``'john_smith'``
+    becomes ``'john smith'`` and ``'a__b'`` becomes ``'a  b'`` (two
+    spaces). Compose with :func:`collapse_whitespace` downstream if you
+    want repeated underscores to collapse to a single space. Parallel to
+    :func:`periods_to_spaces`. Nulls pass through unchanged.
+    """
+    return expr.str.replace_all('_', ' ', literal=True)
+
+
 def replace_whitespace_with(separator: str) -> ExpressionTransform:
     """Build a transform that replaces each whitespace run with ``separator``.
 
@@ -162,6 +177,49 @@ def replace_whitespace_with(separator: str) -> ExpressionTransform:
     return _replace_whitespace
 
 
+def apply_replacements(replacements: dict[str, str]) -> ExpressionTransform:
+    """Build a transform applying literal substring replacements.
+
+    Each key found anywhere in the string is replaced with its mapped
+    value, in one pass (``str.replace_many``). Useful for fixing
+    acronyms after title casing, expanding abbreviations, or mapping a
+    controlled vocabulary — e.g. ``apply_replacements({'Lob': 'LOB',
+    'Ccms': 'CCMS'})`` turns ``'Primary Lob'`` into ``'Primary LOB'``.
+
+    Matching is literal substring, not word-boundary: ``{'Lob': 'LOB'}``
+    also rewrites ``'Lobster'`` to ``'LOBster'``. Choose keys that won't
+    collide with substrings you mean to keep. Nulls pass through
+    unchanged.
+
+    Args:
+        replacements: Map of literal substrings to their replacements.
+            Must be non-empty.
+
+    Returns:
+        An ``ExpressionTransform``. Applied via ``compose_column``.
+
+    Raises:
+        ValueError: If ``replacements`` is empty — a no-op replacer is
+            almost certainly a bug.
+
+    Example:
+        >>> import polars as pl
+        >>> from framesmith import compose_column
+        >>> from framesmith.transforms import apply_replacements
+        >>> fix = apply_replacements({'Lob': 'LOB'})
+        >>> df = pl.DataFrame({'x': ['Primary Lob', 'Rep Lob']})
+        >>> df.with_columns(compose_column('x', [fix]))['x'].to_list()
+        ['Primary LOB', 'Rep LOB']
+    """
+    if len(replacements) == 0:
+        raise ValueError('replacements must not be empty')
+
+    def _apply_replacements(expr: pl.Expr) -> pl.Expr:
+        return expr.str.replace_many(replacements)
+
+    return _apply_replacements
+
+
 # Build the snake_case transform once at module load. The factory is
 # called exactly once; this constant holds the resulting closure.
 _TO_SNAKE_CASE_TRANSFORM: ExpressionTransform = replace_whitespace_with('_')
@@ -174,6 +232,20 @@ def to_lowercase(expr: pl.Expr) -> pl.Expr:
     Nulls pass through unchanged.
     """
     return expr.str.to_lowercase()
+
+
+def to_titlecase(expr: pl.Expr) -> pl.Expr:
+    """Title-case the string: first letter of each word upper, rest lower.
+
+    Atomic: casing only. ``'john smith'`` → ``'John Smith'``. Does not
+    strip, collapse, or replace separators.
+
+    Known limit: title casing lowercases the tail of every word, so it
+    mangles acronyms — ``'rep lob'`` → ``'Rep Lob'``, not ``'Rep LOB'``.
+    Fix specific tokens afterward with :func:`apply_replacements`
+    (e.g. ``{'Lob': 'LOB'}``). Nulls pass through unchanged.
+    """
+    return expr.str.to_titlecase()
 
 
 def to_snake_case(expr: pl.Expr) -> pl.Expr:

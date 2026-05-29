@@ -13,8 +13,10 @@ import re
 import pytest
 
 from framesmith._internal.us_states import (
+    _STATE_ALIASES,
     TRAILING_STATE_CODE_PATTERN,
     US_STATE_CODES,
+    US_STATE_NAME_MAP,
     US_STATE_STANDARDIZE_MAP,
 )
 
@@ -29,6 +31,14 @@ class TestStandardizeMap:
             ('dc', 'DC'),
             ('guam', 'GU'),
             ('puerto rico', 'PR'),
+            # Aliases now feed the code map.
+            ('calif', 'CA'),
+            ('ill', 'IL'),
+            ('mass', 'MA'),
+            ('wva', 'WV'),
+            ('tex', 'TX'),
+            ('penn', 'PA'),
+            ('us virgin islands', 'VI'),
         ],
     )
     def test_key_maps_to_canonical_code(
@@ -40,6 +50,41 @@ class TestStandardizeMap:
         assert all(
             len(code) == 2 and code.isupper()
             for code in US_STATE_STANDARDIZE_MAP.values()
+        )
+
+
+class TestNameMap:
+    @pytest.mark.parametrize(
+        ('key', 'expected_name'),
+        [
+            ('il', 'illinois'),
+            ('illinois', 'illinois'),
+            ('calif', 'california'),
+            ('ca', 'california'),
+            ('dc', 'district of columbia'),
+            ('vi', 'virgin islands'),
+            ('us virgin islands', 'virgin islands'),
+            ('wva', 'west virginia'),
+        ],
+    )
+    def test_key_maps_to_canonical_name(
+        self, key: str, expected_name: str
+    ) -> None:
+        assert US_STATE_NAME_MAP[key] == expected_name
+
+
+class TestMapParity:
+    def test_both_maps_recognize_same_inputs(self) -> None:
+        assert set(US_STATE_STANDARDIZE_MAP) == set(US_STATE_NAME_MAP)
+
+    def test_alias_values_are_canonical_codes(self) -> None:
+        canonical_codes = set(US_STATE_STANDARDIZE_MAP.values())
+        assert all(code in canonical_codes for code in _STATE_ALIASES.values())
+
+    def test_alias_keys_are_lowercase_and_period_free(self) -> None:
+        assert all(
+            '.' not in alias and alias == alias.lower()
+            for alias in _STATE_ALIASES
         )
 
 
