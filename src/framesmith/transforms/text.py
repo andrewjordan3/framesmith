@@ -34,6 +34,7 @@ __all__: list[str] = [
     'replace_ampersand_with_and',
     'replace_whitespace_with',
     'strip_whitespace',
+    'to_lowercase',
     'to_snake_case',
 ]
 
@@ -166,13 +167,24 @@ def replace_whitespace_with(separator: str) -> ExpressionTransform:
 _TO_SNAKE_CASE_TRANSFORM: ExpressionTransform = replace_whitespace_with('_')
 
 
-def to_snake_case(expr: pl.Expr) -> pl.Expr:
-    """Replace whitespace runs with underscores.
+def to_lowercase(expr: pl.Expr) -> pl.Expr:
+    """Lowercase all characters.
 
-    Convenience wrapper that delegates to
-    ``replace_whitespace_with('_')`` so the whitespace-replacement
-    logic lives in exactly one place. Does not strip, lowercase, or
-    Unicode-fold. Assumes the input is already normalized if
-    snake_case canonical form is the goal.
+    Atomic: casing only. Does not strip, collapse, or Unicode-fold.
+    Nulls pass through unchanged.
     """
-    return _TO_SNAKE_CASE_TRANSFORM(expr)
+    return expr.str.to_lowercase()
+
+
+def to_snake_case(expr: pl.Expr) -> pl.Expr:
+    """Lowercase, then replace whitespace runs with underscores.
+
+    True snake_case: ``'Hello World'`` → ``'hello_world'``. Composes
+    :func:`to_lowercase` with the underscore form of
+    :func:`replace_whitespace_with`, so the whitespace-replacement logic
+    lives in exactly one place. Does not strip leading/trailing
+    whitespace or Unicode-fold; compose :func:`strip_whitespace` and the
+    ``UNICODE_TO_ASCII`` recipe upstream if you need canonical input.
+    Nulls pass through unchanged.
+    """
+    return _TO_SNAKE_CASE_TRANSFORM(to_lowercase(expr))

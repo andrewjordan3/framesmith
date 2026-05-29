@@ -196,7 +196,7 @@ class TestRecipeComposability:
     def test_normalize_text_spliced_with_to_snake_case(self) -> None:
         df = pl.DataFrame({'x': ['Sales & Service']})
         result = df.with_columns(compose_column('x', NORMALIZE_THEN_SNAKE))
-        assert result['x'].to_list() == ['Sales_and_Service']
+        assert result['x'].to_list() == ['sales_and_service']
 
 
 # ---------------------------------------------------------------------

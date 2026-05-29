@@ -23,6 +23,7 @@ from framesmith.transforms import (
     replace_ampersand_with_and,
     replace_whitespace_with,
     strip_whitespace,
+    to_lowercase,
     to_snake_case,
 )
 
@@ -210,6 +211,24 @@ class TestPeriodsToSpaces:
         assert result.dtype == pl.String
 
 
+class TestToLowercase:
+    def test_mixed_case_becomes_lower(self) -> None:
+        result = _apply(['Hello World'], to_lowercase)
+        assert result.to_list() == ['hello world']
+
+    def test_already_lowercase_unchanged(self) -> None:
+        result = _apply(['already lower'], to_lowercase)
+        assert result.to_list() == ['already lower']
+
+    def test_digits_and_punctuation_unaffected(self) -> None:
+        result = _apply(['ABC-123'], to_lowercase)
+        assert result.to_list() == ['abc-123']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], to_lowercase)
+        assert result.to_list() == [None]
+
+
 class TestToSnakeCase:
     def test_single_space_becomes_underscore(self) -> None:
         result = _apply(['hello world'], to_snake_case)
@@ -223,33 +242,48 @@ class TestToSnakeCase:
         result = _apply(['already_snake_case'], to_snake_case)
         assert result.to_list() == ['already_snake_case']
 
+    def test_mixed_case_lowercased_and_underscored(self) -> None:
+        result = _apply(['Hello World'], to_snake_case)
+        assert result.to_list() == ['hello_world']
+
+    def test_all_caps_lowercased_and_underscored(self) -> None:
+        result = _apply(['HELLO WORLD'], to_snake_case)
+        assert result.to_list() == ['hello_world']
+
+    def test_internal_caps_lowercased(self) -> None:
+        result = _apply(['MixedCase Word'], to_snake_case)
+        assert result.to_list() == ['mixedcase_word']
+
     def test_null_propagates(self) -> None:
         result = _apply([None], to_snake_case)
         assert result.to_list() == [None]
 
     def test_remains_a_named_function_after_refactor(self) -> None:
         # to_snake_case must stay a named function even though it now
-        # delegates to the factory's closure. If a future refactor
-        # binds it directly to the closure, this fires.
+        # composes to_lowercase with the factory's underscore closure.
+        # If a future refactor binds it directly to a closure, this
+        # fires.
         assert to_snake_case.__name__ == 'to_snake_case'
 
-    def test_matches_replace_whitespace_with_underscore(self) -> None:
-        # Faithfulness pin for the delegation: to_snake_case(expr) and
-        # replace_whitespace_with('_')(expr) must produce identical
-        # output across a varied input.
+    def test_matches_lowercase_then_replace_whitespace(self) -> None:
+        # New faithfulness pin: to_snake_case == to_lowercase composed
+        # with replace_whitespace_with('_'). Inputs include uppercase so
+        # the lowercase step is actually exercised.
         underscore = replace_whitespace_with('_')
         inputs = [
-            'hello world',
-            'hello   world',
-            'already_snake_case',
-            ' leading and trailing ',
-            'tabs\tand\nnewlines',
+            'Hello World',
+            'HELLO   WORLD',
+            'Already_Snake',
+            ' Leading Trailing ',
+            'Tabs\tAnd\nNewlines',
             None,
         ]
         df = pl.DataFrame({'x': inputs}, schema={'x': pl.String})
         from_snake = df.with_columns(compose_column('x', [to_snake_case]))
-        from_underscore = df.with_columns(compose_column('x', [underscore]))
-        assert_frame_equal(from_snake, from_underscore)
+        from_manual = df.with_columns(
+            compose_column('x', [to_lowercase, underscore])
+        )
+        assert_frame_equal(from_snake, from_manual)
 
 
 class TestReplaceWhitespaceWith:
@@ -340,6 +374,7 @@ class TestNullPropagationBatch:
             replace_ampersand_with_and,
             remove_apostrophes,
             remove_periods,
+            to_lowercase,
             to_snake_case,
         ]
         expected = pl.Series('x', [None], dtype=pl.String)

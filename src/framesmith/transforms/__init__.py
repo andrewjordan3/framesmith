@@ -32,6 +32,7 @@ from framesmith.transforms.text import (
     replace_ampersand_with_and,
     replace_whitespace_with,
     strip_whitespace,
+    to_lowercase,
     to_snake_case,
 )
 
@@ -54,6 +55,7 @@ __all__: list[str] = [
     'replace_ampersand_with_and',
     'replace_whitespace_with',
     'strip_whitespace',
+    'to_lowercase',
     'to_snake_case',
     'trailing_minus_to_prefix',
 ]
