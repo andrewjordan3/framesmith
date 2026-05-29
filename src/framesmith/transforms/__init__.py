@@ -15,6 +15,11 @@ from framesmith.transforms.categorical import (
     collapse_keep_top_n,
     collapse_rare_by_count,
 )
+from framesmith.transforms.dates import (
+    EpochTimeUnit,
+    normalize_epoch_timestamps,
+    normalize_excel_serial_dates,
+)
 from framesmith.transforms.missing import (
     DEFAULT_MISSING_SENTINELS,
     nullify_sentinels,
@@ -50,6 +55,7 @@ from framesmith.transforms.text import (
 
 __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
+    'EpochTimeUnit',
     'accounting_parens_to_negative',
     'apply_replacements',
     'cast_to_float64',
@@ -58,6 +64,8 @@ __all__: list[str] = [
     'collapse_whitespace',
     'extract_email_local_part',
     'fold_to_ascii',
+    'normalize_epoch_timestamps',
+    'normalize_excel_serial_dates',
     'normalize_unicode_nfkc',
     'nullify_blank_strings',
     'nullify_sentinels',
