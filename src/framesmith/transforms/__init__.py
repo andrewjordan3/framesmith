@@ -11,6 +11,10 @@ from framesmith.transforms.addresses import (
     standardize_state_name,
     strip_trailing_state,
 )
+from framesmith.transforms.bounds import (
+    clip_numeric,
+    winsorize_numeric,
+)
 from framesmith.transforms.categorical import (
     collapse_keep_top_n,
     collapse_rare_by_count,
@@ -65,6 +69,7 @@ __all__: list[str] = [
     'accounting_parens_to_negative',
     'apply_replacements',
     'cast_to_float64',
+    'clip_numeric',
     'collapse_keep_top_n',
     'collapse_rare_by_count',
     'collapse_whitespace',
@@ -96,4 +101,5 @@ __all__: list[str] = [
     'to_titlecase',
     'trailing_minus_to_prefix',
     'underscores_to_spaces',
+    'winsorize_numeric',
 ]
