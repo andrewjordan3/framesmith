@@ -30,8 +30,12 @@ from framesmith.transforms.missing import (
     nullify_sentinels,
 )
 from framesmith.transforms.names import (
+    DEFAULT_NAME_PREFIXES,
+    DEFAULT_NAME_SUFFIXES,
     extract_email_local_part,
     remove_jr_suffix,
+    strip_name_prefixes,
+    strip_name_suffixes,
 )
 from framesmith.transforms.numeric import (
     accounting_parens_to_negative,
@@ -65,6 +69,8 @@ from framesmith.transforms.text import (
 
 __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
+    'DEFAULT_NAME_PREFIXES',
+    'DEFAULT_NAME_SUFFIXES',
     'EpochTimeUnit',
     'accounting_parens_to_negative',
     'apply_replacements',
@@ -94,6 +100,8 @@ __all__: list[str] = [
     'replace_whitespace_with',
     'standardize_state',
     'standardize_state_name',
+    'strip_name_prefixes',
+    'strip_name_suffixes',
     'strip_trailing_state',
     'strip_whitespace',
     'to_lowercase',

@@ -1,13 +1,25 @@
 # framesmith/transforms/names.py
 """Atomic transforms for person-name normalization."""
 
+import re
+from collections.abc import Sequence
+
 import polars as pl
 
-from framesmith._internal import TRAILING_JR_PATTERN
+from framesmith._internal import (
+    DEFAULT_NAME_PREFIXES,
+    DEFAULT_NAME_SUFFIXES,
+    TRAILING_JR_PATTERN,
+)
+from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
+    'DEFAULT_NAME_PREFIXES',
+    'DEFAULT_NAME_SUFFIXES',
     'extract_email_local_part',
     'remove_jr_suffix',
+    'strip_name_prefixes',
+    'strip_name_suffixes',
 ]
 
 
@@ -47,3 +59,85 @@ def extract_email_local_part(expr: pl.Expr) -> pl.Expr:
     Nulls pass through as null.
     """
     return expr.str.split('@').list.first()
+
+
+def _name_token_alternation(tokens: Sequence[str]) -> str:
+    """Build a regex alternation from affix tokens, longest-first and escaped.
+
+    Longest-first so a token that is a prefix of a longer one does not
+    shadow it ('iii' before 'ii', 'mrs' before 'mr'); each token is
+    escaped so it matches literally.
+    """
+    ordered_tokens: list[str] = sorted(tokens, key=len, reverse=True)
+    return '|'.join(re.escape(token) for token in ordered_tokens)
+
+
+def strip_name_suffixes(
+    suffixes: Sequence[str] = DEFAULT_NAME_SUFFIXES,
+) -> ExpressionTransform:
+    """Remove a trailing name suffix (Jr, Sr, II-IV, Esq, …).
+
+    Case-insensitive. The suffix must be a separate trailing token —
+    preceded by a comma and/or space and at the end of the string — so
+    ``"John Smith, Jr."`` and ``"Jane Doe III"`` are stripped while
+    ``"Hawaii"`` (which merely ends in "ii") is left alone. The separator
+    requirement is mandatory for exactly this reason.
+
+    Atomic: removes only the suffix and its adjacent separator; does not
+    collapse interior whitespace or strip ends. Nulls pass through. The
+    default set excludes bare ``I`` and ``V`` to avoid clobbering
+    single-letter middle initials; pass ``suffixes`` to customize.
+
+    Args:
+        suffixes: Suffix tokens (bare, lowercase or any case). Must be
+            non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``suffixes`` is empty.
+    """
+    if len(suffixes) == 0:
+        raise ValueError('suffixes must not be empty')
+
+    pattern: str = rf'(?i)[, ]+(?:{_name_token_alternation(suffixes)})\.?$'
+
+    def _strip_name_suffixes(expr: pl.Expr) -> pl.Expr:
+        return expr.str.replace(pattern, '')
+
+    return _strip_name_suffixes
+
+
+def strip_name_prefixes(
+    prefixes: Sequence[str] = DEFAULT_NAME_PREFIXES,
+) -> ExpressionTransform:
+    """Remove a leading honorific prefix (Mr, Mrs, Ms, Dr, Prof, …).
+
+    Case-insensitive. The prefix must be a leading token followed by a
+    separator (optional period then whitespace), so ``"Dr. John Smith"``
+    and ``"Mrs Jane Doe"`` are stripped while ``"Drake Smith"`` is left
+    alone. The default set excludes ``St`` (a surname element, e.g.
+    ``"St. John"``); pass ``prefixes`` to customize.
+
+    Atomic: removes only the prefix and its adjacent separator; does not
+    collapse interior whitespace or strip ends. Nulls pass through.
+
+    Args:
+        prefixes: Prefix tokens (bare, any case). Must be non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``prefixes`` is empty.
+    """
+    if len(prefixes) == 0:
+        raise ValueError('prefixes must not be empty')
+
+    pattern: str = rf'(?i)^(?:{_name_token_alternation(prefixes)})\.?\s+'
+
+    def _strip_name_prefixes(expr: pl.Expr) -> pl.Expr:
+        return expr.str.replace(pattern, '')
+
+    return _strip_name_prefixes
