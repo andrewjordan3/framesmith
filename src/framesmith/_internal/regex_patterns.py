@@ -22,10 +22,12 @@ polars' regex strings do not take a separate flags argument.
 __all__: list[str] = [
     'BLANK_OR_WHITESPACE_ONLY_PATTERN',
     'PAREN_NEGATIVE_PATTERN',
+    'STANDALONE_INITIAL_PATTERN',
     'THOUSANDS_SEPARATOR_PATTERN',
     'TRAILING_JR_PATTERN',
     'TRAILING_MINUS_PATTERN',
     'WHITESPACE_RUN_PATTERN',
+    'ZIP_CODE_PATTERN',
 ]
 
 
@@ -41,6 +43,15 @@ BLANK_OR_WHITESPACE_ONLY_PATTERN: str = r'^\s*$'
 # whitespace. The inline ``(?i)`` flag makes the match case-insensitive,
 # since polars regex strings do not accept a separate ``flags`` argument.
 TRAILING_JR_PATTERN: str = r'(?i)(?:[, ]+)?jr\.?$'
+
+# A standalone single-letter initial: a word-initial letter immediately
+# followed by a period and/or whitespace, captured in group 1. Rust regex
+# has no lookahead, so the trailing ``[.\s]+`` is what proves the letter
+# stands alone — a letter beginning a longer word is followed by another
+# letter and does not match ('J' in 'J. R.' matches; 'S' in 'Smith' does
+# not). Used to normalize initials to 'J. R.' form via the replacement
+# '$1. '.
+STANDALONE_INITIAL_PATTERN: str = r'(?i)\b([a-z])[.\s]+'
 
 # Accounting-style parenthesized negative: ``"(123.45)"``,
 # ``"( $1,234.56 )"``. Anchored to the whole value; captures the content
@@ -60,3 +71,10 @@ TRAILING_MINUS_PATTERN: str = r'^([^-].+)-$'
 # whitespace) before casting. As a character class, ``,`` and ``\s``
 # are atomic; no escaping needed.
 THOUSANDS_SEPARATOR_PATTERN: str = r'[,\s]'
+
+# Trailing 5-digit US ZIP, with an optional ZIP+4 suffix that is matched but
+# not captured, tolerating trailing punctuation/whitespace. Capture group 1
+# is the five-digit ZIP. The leading \b prevents capturing the trailing five
+# digits of a longer number; end-anchoring keeps a mid-string number (e.g. a
+# street number) from matching when no real ZIP is present.
+ZIP_CODE_PATTERN: str = r'\b(\d{5})(?:-\d{4})?[,.\s]*$'

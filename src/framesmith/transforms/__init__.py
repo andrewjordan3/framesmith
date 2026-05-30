@@ -7,8 +7,15 @@ is private — callers import from ``framesmith.transforms``.
 """
 
 from framesmith.transforms.addresses import (
+    DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_STREET_SUFFIX_MAP,
+    DEFAULT_UNIT_MARKER_MAP,
+    extract_zip_code,
+    standardize_directionals,
     standardize_state,
     standardize_state_name,
+    standardize_street_suffixes,
+    standardize_unit_markers,
     strip_trailing_state,
 )
 from framesmith.transforms.bounds import (
@@ -30,10 +37,13 @@ from framesmith.transforms.missing import (
     nullify_sentinels,
 )
 from framesmith.transforms.names import (
+    DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
     extract_email_local_part,
+    remove_credentials,
     remove_jr_suffix,
+    standardize_initials,
     strip_name_prefixes,
     strip_name_suffixes,
 )
@@ -68,9 +78,13 @@ from framesmith.transforms.text import (
 )
 
 __all__: list[str] = [
+    'DEFAULT_CREDENTIALS',
+    'DEFAULT_DIRECTIONAL_MAP',
     'DEFAULT_MISSING_SENTINELS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_STREET_SUFFIX_MAP',
+    'DEFAULT_UNIT_MARKER_MAP',
     'EpochTimeUnit',
     'accounting_parens_to_negative',
     'apply_replacements',
@@ -80,6 +94,7 @@ __all__: list[str] = [
     'collapse_rare_by_count',
     'collapse_whitespace',
     'extract_email_local_part',
+    'extract_zip_code',
     'flag_dates_outside_range',
     'flag_iqr_outliers',
     'flag_mad_outliers',
@@ -93,13 +108,18 @@ __all__: list[str] = [
     'percent_to_fraction',
     'periods_to_spaces',
     'remove_apostrophes',
+    'remove_credentials',
     'remove_jr_suffix',
     'remove_periods',
     'remove_thousands_separators',
     'replace_ampersand_with_and',
     'replace_whitespace_with',
+    'standardize_directionals',
+    'standardize_initials',
     'standardize_state',
     'standardize_state_name',
+    'standardize_street_suffixes',
+    'standardize_unit_markers',
     'strip_name_prefixes',
     'strip_name_suffixes',
     'strip_trailing_state',

@@ -14,6 +14,7 @@ from framesmith._internal import (
     BLANK_OR_WHITESPACE_ONLY_PATTERN,
     TRAILING_JR_PATTERN,
     WHITESPACE_RUN_PATTERN,
+    ZIP_CODE_PATTERN,
 )
 
 
@@ -78,3 +79,16 @@ class TestTrailingJrPattern:
         # The (?i) inline flag should make 'JR' match without passing
         # re.IGNORECASE separately.
         assert re.search(TRAILING_JR_PATTERN, 'Smith JR') is not None
+
+
+class TestZipCodePattern:
+    def test_is_importable_str(self) -> None:
+        assert isinstance(ZIP_CODE_PATTERN, str)
+
+    def test_captures_five_dropping_plus_four(self) -> None:
+        match = re.search(ZIP_CODE_PATTERN, 'x 62704-1234')
+        assert match is not None
+        assert match.group(1) == '62704'
+
+    def test_does_not_grab_last_five_of_longer_number(self) -> None:
+        assert re.search(ZIP_CODE_PATTERN, '123456') is None
