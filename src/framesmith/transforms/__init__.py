@@ -36,6 +36,11 @@ from framesmith.transforms.numeric import (
     remove_thousands_separators,
     trailing_minus_to_prefix,
 )
+from framesmith.transforms.outliers import (
+    flag_iqr_outliers,
+    flag_mad_outliers,
+    flag_zscore_outliers,
+)
 from framesmith.transforms.text import (
     apply_replacements,
     collapse_whitespace,
@@ -65,6 +70,9 @@ __all__: list[str] = [
     'collapse_whitespace',
     'extract_email_local_part',
     'flag_dates_outside_range',
+    'flag_iqr_outliers',
+    'flag_mad_outliers',
+    'flag_zscore_outliers',
     'fold_to_ascii',
     'normalize_epoch_timestamps',
     'normalize_excel_serial_dates',
