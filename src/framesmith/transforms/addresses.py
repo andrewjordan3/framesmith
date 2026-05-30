@@ -19,6 +19,7 @@ import polars as pl
 
 from framesmith._internal import (
     DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_STREET_SUFFIX_MAP,
     DEFAULT_UNIT_MARKER_MAP,
     TRAILING_STATE_CODE_PATTERN,
     US_STATE_NAME_MAP,
@@ -28,10 +29,12 @@ from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
     'DEFAULT_DIRECTIONAL_MAP',
+    'DEFAULT_STREET_SUFFIX_MAP',
     'DEFAULT_UNIT_MARKER_MAP',
     'standardize_directionals',
     'standardize_state',
     'standardize_state_name',
+    'standardize_street_suffixes',
     'standardize_unit_markers',
     'strip_trailing_state',
 ]
@@ -204,3 +207,36 @@ def standardize_unit_markers(
     if len(unit_marker_map) == 0:
         raise ValueError('unit_marker_map must not be empty')
     return _build_token_standardizer(unit_marker_map)
+
+
+def standardize_street_suffixes(
+    street_suffix_map: Mapping[str, Sequence[str]] = DEFAULT_STREET_SUFFIX_MAP,
+) -> ExpressionTransform:
+    """Standardize street-type words to USPS abbreviations (``Street`` → ``ST``).
+
+    Rewrites each whole-word street suffix — spelled-out or abbreviated,
+    any case, optional trailing period — to its uppercase USPS
+    Publication 28 abbreviation (``"123 Main Street"`` → ``"123 Main
+    ST"``, ``"Grand Avenue"`` → ``"Grand AVE"``).
+
+    The default is a curated common subset of the ~200 USPS C1 entries;
+    pass ``street_suffix_map`` for the full table or a custom set. Many
+    street types are common words (``RUN``, ``ROW``, ``WAY``); whole-word
+    matching keeps them from firing inside words like ``"Broadway"``.
+    Token replacement, not parsing: a street named ``"Park Avenue"``
+    becomes ``"PARK AVE"``. Nulls pass through.
+
+    Args:
+        street_suffix_map: Canonical USPS abbreviation → variant spellings
+            (variants lowercase, disjoint across canonicals). Must be
+            non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``street_suffix_map`` is empty.
+    """
+    if len(street_suffix_map) == 0:
+        raise ValueError('street_suffix_map must not be empty')
+    return _build_token_standardizer(street_suffix_map)

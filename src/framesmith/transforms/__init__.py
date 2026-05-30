@@ -8,10 +8,12 @@ is private — callers import from ``framesmith.transforms``.
 
 from framesmith.transforms.addresses import (
     DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_STREET_SUFFIX_MAP,
     DEFAULT_UNIT_MARKER_MAP,
     standardize_directionals,
     standardize_state,
     standardize_state_name,
+    standardize_street_suffixes,
     standardize_unit_markers,
     strip_trailing_state,
 )
@@ -80,6 +82,7 @@ __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_STREET_SUFFIX_MAP',
     'DEFAULT_UNIT_MARKER_MAP',
     'EpochTimeUnit',
     'accounting_parens_to_negative',
@@ -113,6 +116,7 @@ __all__: list[str] = [
     'standardize_initials',
     'standardize_state',
     'standardize_state_name',
+    'standardize_street_suffixes',
     'standardize_unit_markers',
     'strip_name_prefixes',
     'strip_name_suffixes',

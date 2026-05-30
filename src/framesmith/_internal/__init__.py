@@ -17,6 +17,7 @@ to assemble ``ASCII_COMPAT_MAP``.
 
 from framesmith._internal.address_tokens import (
     DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_STREET_SUFFIX_MAP,
     DEFAULT_UNIT_MARKER_MAP,
 )
 from framesmith._internal.name_tokens import (
@@ -47,6 +48,7 @@ __all__: list[str] = [
     'DEFAULT_DIRECTIONAL_MAP',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_STREET_SUFFIX_MAP',
     'DEFAULT_UNIT_MARKER_MAP',
     'PAREN_NEGATIVE_PATTERN',
     'STANDALONE_INITIAL_PATTERN',

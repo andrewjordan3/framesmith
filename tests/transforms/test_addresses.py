@@ -15,6 +15,7 @@ from framesmith.transforms import (
     standardize_directionals,
     standardize_state,
     standardize_state_name,
+    standardize_street_suffixes,
     standardize_unit_markers,
     strip_trailing_state,
     to_titlecase,
@@ -306,6 +307,68 @@ class TestStandardizeUnitMarkers:
             schema={'x': pl.String},
         )
         expr = compose_column('x', [standardize_unit_markers()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+class TestStandardizeStreetSuffixes:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('123 Main Street', '123 Main ST'),
+            ('123 Main St.', '123 Main ST'),
+            ('Grand Avenue', 'Grand AVE'),
+            ('Grand Av', 'Grand AVE'),
+            ('Sunset Boulevard', 'Sunset BLVD'),
+            ('Oak Drive', 'Oak DR'),
+            ('Elm Court', 'Elm CT'),
+            ('5 maple lane', '5 maple LN'),
+        ],
+    )
+    def test_standardizes_street_suffixes(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], standardize_street_suffixes())
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('Broadway', 'Broadway'),  # 'way' must not fire inside it
+            ('Start Ave', 'Start AVE'),  # only the whole-word 'Ave' matches
+        ],
+    )
+    def test_whole_word_boundary_pins(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], standardize_street_suffixes())
+        assert result.to_list() == [expected]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], standardize_street_suffixes())
+        assert result.to_list() == [None]
+
+    def test_custom_map(self) -> None:
+        result = _apply(
+            ['Main Esplanade'],
+            standardize_street_suffixes({'ESPL': ('esplanade', 'espl')}),
+        )
+        assert result.to_list() == ['Main ESPL']
+
+    def test_empty_map_raises(self) -> None:
+        with pytest.raises(ValueError, match='empty'):
+            standardize_street_suffixes({})
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(standardize_street_suffixes())
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['123 Main Street', 'Broadway', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [standardize_street_suffixes()])
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
