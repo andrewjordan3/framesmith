@@ -33,6 +33,7 @@ from framesmith._internal.regex_patterns import (
     TRAILING_JR_PATTERN,
     TRAILING_MINUS_PATTERN,
     WHITESPACE_RUN_PATTERN,
+    ZIP_CODE_PATTERN,
 )
 from framesmith._internal.unicode_maps import ASCII_COMPAT_MAP
 from framesmith._internal.us_states import (
@@ -59,4 +60,5 @@ __all__: list[str] = [
     'US_STATE_NAME_MAP',
     'US_STATE_STANDARDIZE_MAP',
     'WHITESPACE_RUN_PATTERN',
+    'ZIP_CODE_PATTERN',
 ]

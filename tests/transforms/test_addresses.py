@@ -12,6 +12,7 @@ from polars.testing import assert_frame_equal
 
 from framesmith import ExpressionTransform, compose_column
 from framesmith.transforms import (
+    extract_zip_code,
     standardize_directionals,
     standardize_state,
     standardize_state_name,
@@ -369,6 +370,60 @@ class TestStandardizeStreetSuffixes:
             schema={'x': pl.String},
         )
         expr = compose_column('x', [standardize_street_suffixes()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+class TestExtractZipCode:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('Springfield, IL 62704', '62704'),
+            ('123 Main St, Springfield IL 62704-1234', '62704'),  # +4 dropped
+            ('62704', '62704'),
+            ('Springfield, IL 62704.', '62704'),  # trailing period
+            ('Springfield, IL 62704, ', '62704'),  # trailing comma/space
+            ('02134', '02134'),  # leading zero preserved
+            ('Boston, MA 02134-5678', '02134'),
+        ],
+    )
+    def test_extracts_trailing_zip(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], extract_zip_code)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            '12345 Main St, Springfield IL',  # street number, no ZIP
+            'PO Box 4567',  # only 4 digits
+            '123456',  # 6-digit run, must not grab last five
+            'no zip here',
+            'Springfield IL 62704 USA',  # trailing text defeats the anchor
+        ],
+    )
+    def test_no_match_yields_null(self, value: str) -> None:
+        result = _apply([value], extract_zip_code)
+        assert result.to_list() == [None]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], extract_zip_code)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        # Regression guard: leading zeros are significant, so the result
+        # must stay String and never be cast to an integer.
+        result = _apply(['Boston, MA 02134'], extract_zip_code)
+        assert result.dtype == pl.String
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['Springfield, IL 62704', '12345 Main St', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [extract_zip_code])
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)

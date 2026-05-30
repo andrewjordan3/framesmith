@@ -24,6 +24,7 @@ from framesmith._internal import (
     TRAILING_STATE_CODE_PATTERN,
     US_STATE_NAME_MAP,
     US_STATE_STANDARDIZE_MAP,
+    ZIP_CODE_PATTERN,
 )
 from framesmith.types import ExpressionTransform
 
@@ -31,6 +32,7 @@ __all__: list[str] = [
     'DEFAULT_DIRECTIONAL_MAP',
     'DEFAULT_STREET_SUFFIX_MAP',
     'DEFAULT_UNIT_MARKER_MAP',
+    'extract_zip_code',
     'standardize_directionals',
     'standardize_state',
     'standardize_state_name',
@@ -240,3 +242,31 @@ def standardize_street_suffixes(
     if len(street_suffix_map) == 0:
         raise ValueError('street_suffix_map must not be empty')
     return _build_token_standardizer(street_suffix_map)
+
+
+def extract_zip_code(expr: pl.Expr) -> pl.Expr:
+    """Extract the trailing 5-digit US ZIP code from a string.
+
+    Returns the five-digit ZIP at the end of the value (``"Springfield,
+    IL 62704"`` → ``"62704"``). A ZIP+4 keeps only the five
+    (``"62704-1234"`` → ``"62704"``). When there is no trailing ZIP the
+    result is **null** — including when the value contains an unrelated
+    5-digit number such as a street number (``"12345 Main St"`` → null).
+
+    Output is ``String``; leading zeros are preserved (``"02134"``), so do
+    not cast the result to an integer.
+
+    The ZIP must be at the end of the value (optionally followed by
+    punctuation/whitespace) and be a separate token. Trailing text
+    (``"… 62704 USA"``), a letter-glued ZIP (``"IL62704"``), or an
+    undashed 9-digit ZIP+4 will not match and yield null. Nulls pass
+    through.
+
+    Args:
+        expr: A string expression (e.g. an address or city/state/ZIP
+            field).
+
+    Returns:
+        A ``String`` expression with the 5-digit ZIP, or null.
+    """
+    return expr.str.extract(ZIP_CODE_PATTERN, 1)
