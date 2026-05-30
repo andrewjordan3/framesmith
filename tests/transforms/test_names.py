@@ -3,9 +3,15 @@
 
 import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from framesmith import ExpressionTransform, compose_column
-from framesmith.transforms import extract_email_local_part, remove_jr_suffix
+from framesmith.transforms import (
+    extract_email_local_part,
+    remove_jr_suffix,
+    strip_name_prefixes,
+    strip_name_suffixes,
+)
 
 
 def _apply(
@@ -101,3 +107,116 @@ class TestExtractEmailLocalPart:
     def test_output_dtype_is_string(self) -> None:
         result = _apply(['john@example.com'], extract_email_local_part)
         assert result.dtype == pl.String
+
+
+class TestStripNameSuffixes:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('John Smith Jr', 'John Smith'),
+            ('John Smith, Jr.', 'John Smith'),
+            ('Jane Doe III', 'Jane Doe'),
+            ('Bob IV', 'Bob'),
+            ('Mary II', 'Mary'),
+            ('John Smith Esq', 'John Smith'),
+            ('Robert Snr', 'Robert'),
+            ('JOHN SMITH JR', 'JOHN SMITH'),
+        ],
+    )
+    def test_strips_trailing_suffix(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], strip_name_suffixes())
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'Hawaii',  # ends in 'ii' but no separator
+            'Hawaii Bank',  # 'ii' is interior, not a trailing token
+            'John V',  # bare V is a middle initial, excluded
+            'Smith',  # no suffix
+        ],
+    )
+    def test_leaves_lookalikes_unchanged(self, value: str) -> None:
+        result = _apply([value], strip_name_suffixes())
+        assert result.to_list() == [value]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], strip_name_suffixes())
+        assert result.to_list() == [None]
+
+    def test_custom_suffix_list(self) -> None:
+        # A token not in the default set.
+        result = _apply(['Jane Doe PhD'], strip_name_suffixes(['phd']))
+        assert result.to_list() == ['Jane Doe']
+
+    def test_empty_suffixes_raises(self) -> None:
+        with pytest.raises(ValueError, match='empty'):
+            strip_name_suffixes([])
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(strip_name_suffixes())
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['John Smith Jr', 'Hawaii', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [strip_name_suffixes()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+class TestStripNamePrefixes:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('Dr. John Smith', 'John Smith'),
+            ('Mr John', 'John'),
+            ('Mrs. Jane Doe', 'Jane Doe'),
+            ('Prof Bob', 'Bob'),
+            ('Ms Lee', 'Lee'),
+            ('Miss Jane', 'Jane'),
+            ('DR JOHN', 'JOHN'),
+        ],
+    )
+    def test_strips_leading_prefix(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], strip_name_prefixes())
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'Drake Smith',  # 'Dr' not followed by a separator
+            'St. John',  # St is a surname element, excluded
+            'Mr',  # no following separator
+        ],
+    )
+    def test_leaves_lookalikes_unchanged(self, value: str) -> None:
+        result = _apply([value], strip_name_prefixes())
+        assert result.to_list() == [value]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], strip_name_prefixes())
+        assert result.to_list() == [None]
+
+    def test_empty_prefixes_raises(self) -> None:
+        with pytest.raises(ValueError, match='empty'):
+            strip_name_prefixes([])
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(strip_name_prefixes())
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['Dr. John Smith', 'Drake Smith', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [strip_name_prefixes()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
