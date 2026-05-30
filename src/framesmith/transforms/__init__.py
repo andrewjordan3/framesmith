@@ -17,6 +17,7 @@ from framesmith.transforms.categorical import (
 )
 from framesmith.transforms.dates import (
     EpochTimeUnit,
+    flag_dates_outside_range,
     normalize_epoch_timestamps,
     normalize_excel_serial_dates,
 )
@@ -63,6 +64,7 @@ __all__: list[str] = [
     'collapse_rare_by_count',
     'collapse_whitespace',
     'extract_email_local_part',
+    'flag_dates_outside_range',
     'fold_to_ascii',
     'normalize_epoch_timestamps',
     'normalize_excel_serial_dates',

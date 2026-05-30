@@ -7,7 +7,7 @@ These convert a numeric column (Unix epoch, Excel serial) into a naive
 ``compose_column`` and recipes. Timezone handling is a separate concern.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 import polars as pl
@@ -16,6 +16,7 @@ from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
     'EpochTimeUnit',
+    'flag_dates_outside_range',
     'normalize_epoch_timestamps',
     'normalize_excel_serial_dates',
 ]
@@ -83,3 +84,76 @@ def normalize_excel_serial_dates(expr: pl.Expr) -> pl.Expr:
         (expr.cast(pl.Float64) * _MICROSECONDS_PER_DAY).round().cast(pl.Int64)
     )
     return pl.lit(_EXCEL_EPOCH) + pl.duration(microseconds=total_microseconds)
+
+
+def flag_dates_outside_range(
+    lower: date | None = None,
+    upper: date | None = None,
+) -> ExpressionTransform:
+    """Build a transform flagging dates outside an inclusive ``[lower, upper]``.
+
+    The returned transform maps a date/datetime column to a boolean: true
+    where the value is below ``lower`` or above ``upper``, false where it
+    is within the bounds, null where the input is null. Apply via
+    ``compose_column`` to build a flag column, or use the expression
+    directly to filter (``df.filter(~...)``).
+
+    At least one bound is required. With both, it flags impossible /
+    out-of-domain dates; with only ``upper``, future dates; with only
+    ``lower``, stale dates.
+
+    Bounds are inclusive: a value exactly equal to ``lower`` or ``upper``
+    is in range and is not flagged. A null input yields a null flag —
+    missingness is not treated as out-of-range. When filtering on the
+    result, note that null flags are excluded by ``df.filter``, so callers
+    who want to keep null-dated rows should handle them explicitly.
+
+    Args:
+        lower: Earliest in-range value (inclusive). A ``date`` or
+            ``datetime``; compares correctly against either column dtype.
+            ``None`` disables the lower check.
+        upper: Latest in-range value (inclusive), same typing. ``None``
+            disables the upper check.
+
+    Returns:
+        An ``ExpressionTransform`` (true = out of range) for
+        ``compose_column``.
+
+    Raises:
+        ValueError: If both ``lower`` and ``upper`` are ``None``.
+
+    Example:
+        >>> import polars as pl
+        >>> from datetime import datetime
+        >>> import framesmith as fs
+        >>> from framesmith.transforms import flag_dates_outside_range
+        >>> df = pl.DataFrame({'d': [datetime(1990, 1, 1), datetime(2030, 1, 1)]})
+        >>> df.with_columns(
+        ...     fs.compose_column(
+        ...         'd',
+        ...         [flag_dates_outside_range(
+        ...             lower=datetime(2000, 1, 1), upper=datetime(2026, 1, 1)
+        ...         )],
+        ...         output_column_name='d_out_of_range',
+        ...     )
+        ... )['d_out_of_range'].to_list()
+        [True, True]
+    """
+    if lower is None and upper is None:
+        raise ValueError(
+            'flag_dates_outside_range requires at least one of lower or upper.'
+        )
+
+    def _flag_dates_outside_range(expr: pl.Expr) -> pl.Expr:
+        # The factory guarantees at least one bound, so conditions is non-empty.
+        conditions: list[pl.Expr] = []
+        if lower is not None:
+            conditions.append(expr < pl.lit(lower))
+        if upper is not None:
+            conditions.append(expr > pl.lit(upper))
+        combined: pl.Expr = conditions[0]
+        for condition in conditions[1:]:
+            combined = combined | condition
+        return combined
+
+    return _flag_dates_outside_range
