@@ -25,6 +25,7 @@ from framesmith.transforms.bounds import (
 from framesmith.transforms.categorical import (
     collapse_keep_top_n,
     collapse_rare_by_count,
+    map_categories,
 )
 from framesmith.transforms.dates import (
     EpochTimeUnit,
@@ -100,6 +101,7 @@ __all__: list[str] = [
     'flag_mad_outliers',
     'flag_zscore_outliers',
     'fold_to_ascii',
+    'map_categories',
     'normalize_epoch_timestamps',
     'normalize_excel_serial_dates',
     'normalize_unicode_nfkc',

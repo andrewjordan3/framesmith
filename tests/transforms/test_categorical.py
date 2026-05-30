@@ -12,7 +12,11 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from framesmith import NORMALIZE_TEXT, ExpressionTransform, compose_column
-from framesmith.transforms import collapse_keep_top_n, collapse_rare_by_count
+from framesmith.transforms import (
+    collapse_keep_top_n,
+    collapse_rare_by_count,
+    map_categories,
+)
 
 
 def _apply(
@@ -25,6 +29,61 @@ def _apply(
     """
     df = pl.DataFrame({'x': values}, schema={'x': pl.String})
     return df.with_columns(compose_column('x', [transform]))['x']
+
+
+class TestMapCategories:
+    def test_same_type_string_passthrough(self) -> None:
+        # Unmapped 'c' passes through unchanged; null passes through.
+        result = _apply(
+            ['a', 'b', 'c', None], map_categories({'a': 'alpha', 'b': 'beta'})
+        )
+        assert result.to_list() == ['alpha', 'beta', 'c', None]
+
+    def test_code_to_label_cross_type(self) -> None:
+        # Int keys -> String values. Unmapped 3 is cast to the output
+        # dtype ('3'); null passes through. Output column is String.
+        df = pl.DataFrame({'x': [1, 2, 3, None]}, schema={'x': pl.Int64})
+        result = df.with_columns(
+            compose_column('x', [map_categories({1: 'Yes', 2: 'No'})])
+        )['x']
+        assert result.to_list() == ['Yes', 'No', '3', None]
+        assert result.dtype == pl.String
+
+    def test_same_type_int_preserves_dtype(self) -> None:
+        df = pl.DataFrame({'x': [1, 2, 3, None]}, schema={'x': pl.Int64})
+        result = df.with_columns(
+            compose_column('x', [map_categories({1: 10, 2: 20})])
+        )['x']
+        assert result.to_list() == [10, 20, 3, None]
+        assert result.dtype == pl.Int64
+
+    def test_explicit_null_mapping(self) -> None:
+        # None as a key maps null; unmapped 2 stringifies under the
+        # cross-type map.
+        df = pl.DataFrame({'x': [1, 2, None]}, schema={'x': pl.Int64})
+        result = df.with_columns(
+            compose_column('x', [map_categories({1: 'Yes', None: 'missing'})])
+        )['x']
+        assert result.to_list() == ['Yes', '2', 'missing']
+
+    def test_case_sensitive_exact_match(self) -> None:
+        # No normalization: 'A' does not match key 'a'.
+        result = _apply(['a', 'A'], map_categories({'a': 'alpha'}))
+        assert result.to_list() == ['alpha', 'A']
+
+    def test_empty_map_raises(self) -> None:
+        with pytest.raises(ValueError, match='empty'):
+            map_categories({})
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(map_categories({'a': 'b'}))
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame({'x': [1, 2, 3, None]}, schema={'x': pl.Int64})
+        expr = compose_column('x', [map_categories({1: 'Yes', 2: 'No'})])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
 
 
 class TestCollapseRareByCount:
