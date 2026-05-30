@@ -8,6 +8,7 @@ from polars.testing import assert_frame_equal
 from framesmith import ExpressionTransform, compose_column
 from framesmith.transforms import (
     extract_email_local_part,
+    remove_credentials,
     remove_jr_suffix,
     strip_name_prefixes,
     strip_name_suffixes,
@@ -217,6 +218,74 @@ class TestStripNamePrefixes:
             schema={'x': pl.String},
         )
         expr = compose_column('x', [strip_name_prefixes()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+class TestRemoveCredentials:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('Jane Smith, MD', 'Jane Smith'),
+            ('Jane Smith, M.D.', 'Jane Smith'),  # period-tolerance
+            ('Jane Smith, MD, PhD', 'Jane Smith'),  # stacking
+            ('Jane Smith, MD, PhD, FACS', 'Jane Smith'),  # 3-stack
+            ('Jane Smith , MD', 'Jane Smith'),  # space before comma
+            ('Smith,MD', 'Smith'),  # no space after comma
+            ('jane smith, phd', 'jane smith'),  # case-insensitive
+            ('Smith, PhD.', 'Smith'),  # trailing period
+        ],
+    )
+    def test_strips_trailing_credentials(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], remove_credentials())
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'John Smith MD',  # no comma -> not stripped
+            'Nguyen Do',  # no comma
+            'John Doe',  # no credential
+        ],
+    )
+    def test_leaves_no_comma_forms_unchanged(self, value: str) -> None:
+        result = _apply([value], remove_credentials())
+        assert result.to_list() == [value]
+
+    def test_space_preceded_surname_not_stripped_even_with_custom_token(
+        self,
+    ) -> None:
+        # The comma-required separator is what protects 'Do': even when
+        # 'do' is in the credential list, the space-preceded surname is
+        # safe, while the comma-set-off ', MD' is stripped.
+        result = _apply(['Mary Do, MD'], remove_credentials(['md', 'do']))
+        assert result.to_list() == ['Mary Do']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], remove_credentials())
+        assert result.to_list() == [None]
+
+    def test_custom_credential_list(self) -> None:
+        # A token not in the default set.
+        result = _apply(['Jane Smith, ASA'], remove_credentials(['asa']))
+        assert result.to_list() == ['Jane Smith']
+
+    def test_empty_credentials_raises(self) -> None:
+        with pytest.raises(ValueError, match='empty'):
+            remove_credentials([])
+
+    def test_factory_returns_callable(self) -> None:
+        assert callable(remove_credentials())
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['Jane Smith, MD, PhD', 'John Smith MD', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [remove_credentials()])
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)

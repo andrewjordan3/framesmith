@@ -7,6 +7,7 @@ period-free form the transforms rely on.
 """
 
 from framesmith._internal.name_tokens import (
+    DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
 )
@@ -25,6 +26,12 @@ class TestTokenForm:
             for token in DEFAULT_NAME_PREFIXES
         )
 
+    def test_credentials_are_lowercase_and_period_free(self) -> None:
+        assert all(
+            token == token.lower() and '.' not in token
+            for token in DEFAULT_CREDENTIALS
+        )
+
 
 class TestDeliberateExclusions:
     def test_suffixes_exclude_bare_roman_initials(self) -> None:
@@ -41,3 +48,13 @@ class TestDeliberateExclusions:
     def test_prefixes_include_common_tokens(self) -> None:
         assert 'mr' in DEFAULT_NAME_PREFIXES
         assert 'dr' in DEFAULT_NAME_PREFIXES
+
+    def test_credentials_exclude_collision_prone_tokens(self) -> None:
+        collision_prone = {'do', 'pa', 'od', 'ba', 'bs', 'ma', 'ms'}
+        assert not (collision_prone & set(DEFAULT_CREDENTIALS))
+
+    def test_credentials_include_common_tokens(self) -> None:
+        assert 'phd' in DEFAULT_CREDENTIALS
+        assert 'md' in DEFAULT_CREDENTIALS
+        assert 'mba' in DEFAULT_CREDENTIALS
+        assert 'facs' in DEFAULT_CREDENTIALS

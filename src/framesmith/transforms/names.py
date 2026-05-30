@@ -7,6 +7,7 @@ from collections.abc import Sequence
 import polars as pl
 
 from framesmith._internal import (
+    DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
     TRAILING_JR_PATTERN,
@@ -14,9 +15,11 @@ from framesmith._internal import (
 from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
+    'DEFAULT_CREDENTIALS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
     'extract_email_local_part',
+    'remove_credentials',
     'remove_jr_suffix',
     'strip_name_prefixes',
     'strip_name_suffixes',
@@ -141,3 +144,63 @@ def strip_name_prefixes(
         return expr.str.replace(pattern, '')
 
     return _strip_name_prefixes
+
+
+def _credential_alternation(tokens: Sequence[str]) -> str:
+    """Build a period-tolerant regex alternation from credential tokens.
+
+    Longest-first (so a token that prefixes a longer one does not shadow
+    it), each character escaped and followed by an optional period, so
+    ``'phd'`` becomes ``p\\.?h\\.?d\\.?`` and matches ``'PhD'``,
+    ``'Ph.D.'``, and ``'P.H.D'`` alike.
+    """
+    ordered_tokens: list[str] = sorted(tokens, key=len, reverse=True)
+    return '|'.join(
+        ''.join(re.escape(character) + r'\.?' for character in token)
+        for token in ordered_tokens
+    )
+
+
+def remove_credentials(
+    credentials: Sequence[str] = DEFAULT_CREDENTIALS,
+) -> ExpressionTransform:
+    """Remove trailing comma-separated professional credentials.
+
+    Strips one or more credentials at the end of the string, each
+    preceded by a comma: ``"Jane Smith, MD, PhD, FACS"`` → ``"Jane
+    Smith"``. Case-insensitive, and tolerant of internal periods so
+    ``"Jane Smith, Ph.D."`` is handled.
+
+    A comma is required before each credential — this is what keeps a
+    space-preceded surname that happens to match a credential token safe
+    (``"Mary Do, MD"`` → ``"Mary Do"``). As a consequence, credentials
+    written without a comma (``"John Smith MD"``) are left unchanged.
+
+    Atomic: removes only the trailing credential run and its adjacent
+    commas/whitespace; does not collapse interior whitespace or strip
+    other ends. Nulls pass through. The default list omits collision-prone
+    short tokens (``do``, ``pa``, bare degrees); pass ``credentials`` to
+    customize — note that adding a token equal to a possible comma-set-off
+    middle name (``"Smith, Do, MD"``) will strip that token too.
+
+    Args:
+        credentials: Credential tokens (bare, any case). Must be
+            non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``credentials`` is empty.
+    """
+    if len(credentials) == 0:
+        raise ValueError('credentials must not be empty')
+
+    pattern: str = (
+        rf'(?i)(?:\s*,\s*(?:{_credential_alternation(credentials)}))+$'
+    )
+
+    def _remove_credentials(expr: pl.Expr) -> pl.Expr:
+        return expr.str.replace(pattern, '')
+
+    return _remove_credentials

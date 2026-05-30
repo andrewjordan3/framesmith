@@ -16,6 +16,7 @@ to assemble ``ASCII_COMPAT_MAP``.
 """
 
 from framesmith._internal.name_tokens import (
+    DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
 )
@@ -37,6 +38,7 @@ from framesmith._internal.us_states import (
 __all__: list[str] = [
     'ASCII_COMPAT_MAP',
     'BLANK_OR_WHITESPACE_ONLY_PATTERN',
+    'DEFAULT_CREDENTIALS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
     'PAREN_NEGATIVE_PATTERN',

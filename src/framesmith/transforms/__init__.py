@@ -30,9 +30,11 @@ from framesmith.transforms.missing import (
     nullify_sentinels,
 )
 from framesmith.transforms.names import (
+    DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
     extract_email_local_part,
+    remove_credentials,
     remove_jr_suffix,
     strip_name_prefixes,
     strip_name_suffixes,
@@ -68,6 +70,7 @@ from framesmith.transforms.text import (
 )
 
 __all__: list[str] = [
+    'DEFAULT_CREDENTIALS',
     'DEFAULT_MISSING_SENTINELS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
@@ -93,6 +96,7 @@ __all__: list[str] = [
     'percent_to_fraction',
     'periods_to_spaces',
     'remove_apostrophes',
+    'remove_credentials',
     'remove_jr_suffix',
     'remove_periods',
     'remove_thousands_separators',
