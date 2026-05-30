@@ -18,6 +18,8 @@ from collections.abc import Sequence
 
 import polars as pl
 
+from framesmith.group.mode import first_mode_in_order
+
 __all__: list[str] = [
     'first_non_null_per_group',
     'mode_then_first_per_group',
@@ -142,7 +144,4 @@ def mode_then_first_per_group(key_columns: Sequence[str]) -> pl.Expr:
     """
     _require_key_columns(key_columns)
 
-    non_null_values: pl.Expr = pl.all().exclude(list(key_columns)).drop_nulls()
-    return non_null_values.filter(
-        non_null_values.is_in(non_null_values.mode().implode())
-    ).first()
+    return first_mode_in_order(pl.all().exclude(list(key_columns)))
