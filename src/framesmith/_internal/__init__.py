@@ -1,11 +1,11 @@
 # framesmith/_internal/__init__.py
 """Internal building blocks: regex pattern strings, unicode maps,
-US state reference data, and name-affix token sets.
+US state reference data, name-affix token sets, and address-token maps.
 
 This is the public surface of ``_internal/`` for the rest of the
 package. Submodules (``regex_patterns.py``, ``unicode_maps.py``,
-``us_states.py``, ``name_tokens.py``) are private — cross-directory
-callers import from ``framesmith._internal``.
+``us_states.py``, ``name_tokens.py``, ``address_tokens.py``) are private
+— cross-directory callers import from ``framesmith._internal``.
 
 Only the maps and patterns actually used outside ``_internal/`` are
 re-exported. The six sub-maps (``MINUS_LIKE_MAP``, ``INVISIBLE_CHAR_MAP``,
@@ -15,6 +15,10 @@ but are not part of this directory's external surface — they exist only
 to assemble ``ASCII_COMPAT_MAP``.
 """
 
+from framesmith._internal.address_tokens import (
+    DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_UNIT_MARKER_MAP,
+)
 from framesmith._internal.name_tokens import (
     DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
@@ -40,8 +44,10 @@ __all__: list[str] = [
     'ASCII_COMPAT_MAP',
     'BLANK_OR_WHITESPACE_ONLY_PATTERN',
     'DEFAULT_CREDENTIALS',
+    'DEFAULT_DIRECTIONAL_MAP',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_UNIT_MARKER_MAP',
     'PAREN_NEGATIVE_PATTERN',
     'STANDALONE_INITIAL_PATTERN',
     'THOUSANDS_SEPARATOR_PATTERN',

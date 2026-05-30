@@ -7,8 +7,12 @@ is private — callers import from ``framesmith.transforms``.
 """
 
 from framesmith.transforms.addresses import (
+    DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_UNIT_MARKER_MAP,
+    standardize_directionals,
     standardize_state,
     standardize_state_name,
+    standardize_unit_markers,
     strip_trailing_state,
 )
 from framesmith.transforms.bounds import (
@@ -72,9 +76,11 @@ from framesmith.transforms.text import (
 
 __all__: list[str] = [
     'DEFAULT_CREDENTIALS',
+    'DEFAULT_DIRECTIONAL_MAP',
     'DEFAULT_MISSING_SENTINELS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_UNIT_MARKER_MAP',
     'EpochTimeUnit',
     'accounting_parens_to_negative',
     'apply_replacements',
@@ -103,9 +109,11 @@ __all__: list[str] = [
     'remove_thousands_separators',
     'replace_ampersand_with_and',
     'replace_whitespace_with',
+    'standardize_directionals',
     'standardize_initials',
     'standardize_state',
     'standardize_state_name',
+    'standardize_unit_markers',
     'strip_name_prefixes',
     'strip_name_suffixes',
     'strip_trailing_state',

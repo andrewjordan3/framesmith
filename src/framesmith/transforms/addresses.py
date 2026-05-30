@@ -1,26 +1,38 @@
 # framesmith/transforms/addresses.py
 """
-Atomic US address-field transforms.
+US address-field transforms.
 
 ``standardize_state`` canonicalizes a whole-value state column to its postal
 code; ``standardize_state_name`` resolves the same inputs to the canonical
 lowercase full name; ``strip_trailing_state`` removes a trailing postal code
-from a location string. The first two share the state reference table in
-``framesmith._internal`` and the lookup-key normalization; ``strip_trailing_state``
-operates on a location string and is codes-only. None compose with each other.
+from a location string. ``standardize_directionals`` and
+``standardize_unit_markers`` rewrite word-bounded address tokens (``North`` →
+``N``, ``Apartment`` → ``APT``) to their USPS abbreviations. All share the
+reference data in ``framesmith._internal``; the state value-standardizers also
+share the lookup-key normalization.
 """
+
+import re
+from collections.abc import Mapping, Sequence
 
 import polars as pl
 
 from framesmith._internal import (
+    DEFAULT_DIRECTIONAL_MAP,
+    DEFAULT_UNIT_MARKER_MAP,
     TRAILING_STATE_CODE_PATTERN,
     US_STATE_NAME_MAP,
     US_STATE_STANDARDIZE_MAP,
 )
+from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
+    'DEFAULT_DIRECTIONAL_MAP',
+    'DEFAULT_UNIT_MARKER_MAP',
+    'standardize_directionals',
     'standardize_state',
     'standardize_state_name',
+    'standardize_unit_markers',
     'strip_trailing_state',
 ]
 
@@ -105,3 +117,90 @@ def strip_trailing_state(expr: pl.Expr) -> pl.Expr:
     Washington state. Nulls pass through as null.
     """
     return expr.str.replace(TRAILING_STATE_CODE_PATTERN, '')
+
+
+def _build_token_standardizer(
+    token_map: Mapping[str, Sequence[str]],
+) -> ExpressionTransform:
+    r"""Build a transform that rewrites word-bounded variants to canonicals.
+
+    Compiles one case-insensitive, word-bounded pattern per canonical
+    (consuming a trailing period) and chains a ``replace_all`` per
+    canonical. ``\b`` makes the chain order-independent — a shorter
+    variant cannot match inside a longer token. Patterns are built once,
+    here; the returned closure only applies them.
+    """
+    compiled_patterns: list[tuple[str, str]] = []
+    for canonical, variants in token_map.items():
+        alternation: str = '|'.join(
+            re.escape(variant)
+            for variant in sorted(variants, key=len, reverse=True)
+        )
+        compiled_patterns.append((rf'(?i)\b(?:{alternation})\b\.?', canonical))
+
+    def _standardize_tokens(expr: pl.Expr) -> pl.Expr:
+        result: pl.Expr = expr
+        for pattern, canonical in compiled_patterns:
+            result = result.str.replace_all(pattern, canonical)
+        return result
+
+    return _standardize_tokens
+
+
+def standardize_directionals(
+    directional_map: Mapping[str, Sequence[str]] = DEFAULT_DIRECTIONAL_MAP,
+) -> ExpressionTransform:
+    """Standardize directional words to USPS abbreviations (``North`` → ``N``).
+
+    Rewrites each whole-word directional — spelled-out or abbreviated, any
+    case, optional trailing period — to its uppercase USPS form
+    (``"123 North Main"`` → ``"123 N Main"``, ``"Northeast"`` → ``"NE"``).
+    Compound directionals are handled correctly: ``"Northeast"`` does not
+    become ``"N"`` + east.
+
+    Token replacement, not address parsing: a street named ``"North
+    Avenue"`` becomes ``"N AVE"``. Some canonicals coincide with state
+    codes (``NE``, ``SE``…) but the output equals the code, so this only
+    normalizes case. Nulls pass through.
+
+    Args:
+        directional_map: Canonical abbreviation → variant spellings
+            (variants lowercase, disjoint across canonicals). Must be
+            non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``directional_map`` is empty.
+    """
+    if len(directional_map) == 0:
+        raise ValueError('directional_map must not be empty')
+    return _build_token_standardizer(directional_map)
+
+
+def standardize_unit_markers(
+    unit_marker_map: Mapping[str, Sequence[str]] = DEFAULT_UNIT_MARKER_MAP,
+) -> ExpressionTransform:
+    """Standardize secondary unit designators to USPS abbreviations.
+
+    Rewrites each whole-word unit marker — spelled-out or abbreviated, any
+    case, optional trailing period — to its uppercase USPS form
+    (``"Apartment 4"`` → ``"APT 4"``, ``"Suite"`` → ``"STE"``). Token
+    replacement, not parsing. ``FL`` (floor) coincides with Florida's
+    code; the output equals the code, so only case is normalized. Nulls
+    pass through.
+
+    Args:
+        unit_marker_map: Canonical abbreviation → variant spellings. Must
+            be non-empty.
+
+    Returns:
+        An ``ExpressionTransform`` for ``compose_column``.
+
+    Raises:
+        ValueError: If ``unit_marker_map`` is empty.
+    """
+    if len(unit_marker_map) == 0:
+        raise ValueError('unit_marker_map must not be empty')
+    return _build_token_standardizer(unit_marker_map)
