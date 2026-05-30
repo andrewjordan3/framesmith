@@ -4,7 +4,7 @@ Shared regex pattern strings for text-processing expressions.
 
 Centralizes the regular-expression strings used across framesmith's
 transform modules so each pattern has a single source of truth. Two
-consumers (e.g. ``transforms/text.py`` and ``transforms/names.py``)
+consumers (e.g. ``transforms/whitespace.py`` and ``transforms/names.py``)
 that need the same whitespace pattern import the same constant instead
 of redefining it.
 
