@@ -36,6 +36,7 @@ from framesmith.transforms.names import (
     extract_email_local_part,
     remove_credentials,
     remove_jr_suffix,
+    standardize_initials,
     strip_name_prefixes,
     strip_name_suffixes,
 )
@@ -102,6 +103,7 @@ __all__: list[str] = [
     'remove_thousands_separators',
     'replace_ampersand_with_and',
     'replace_whitespace_with',
+    'standardize_initials',
     'standardize_state',
     'standardize_state_name',
     'strip_name_prefixes',

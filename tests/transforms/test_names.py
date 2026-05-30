@@ -10,6 +10,7 @@ from framesmith.transforms import (
     extract_email_local_part,
     remove_credentials,
     remove_jr_suffix,
+    standardize_initials,
     strip_name_prefixes,
     strip_name_suffixes,
 )
@@ -286,6 +287,54 @@ class TestRemoveCredentials:
             schema={'x': pl.String},
         )
         expr = compose_column('x', [remove_credentials()])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+class TestStandardizeInitials:
+    @pytest.mark.parametrize(
+        'value',
+        ['J. R. Smith', 'J R Smith', 'J.R. Smith', 'J.R.Smith'],
+    )
+    def test_normalizes_to_canonical_form(self, value: str) -> None:
+        result = _apply([value], standardize_initials)
+        assert result.to_list() == ['J. R. Smith']
+
+    def test_middle_initial_normalized(self) -> None:
+        result = _apply(['Mary J. Smith'], standardize_initials)
+        assert result.to_list() == ['Mary J. Smith']
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'Jo Smith',  # multi-letter token, not an initial
+            'Smith',  # multi-letter token
+            'JR Smith',  # glued pair, ambiguous with name / Jr suffix
+        ],
+    )
+    def test_leaves_non_initials_unchanged(self, value: str) -> None:
+        result = _apply([value], standardize_initials)
+        assert result.to_list() == [value]
+
+    def test_case_preserved(self) -> None:
+        result = _apply(['j. r. smith'], standardize_initials)
+        assert result.to_list() == ['j. r. smith']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], standardize_initials)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['J. R. Smith'], standardize_initials)
+        assert result.dtype == pl.String
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['J R Smith', 'Jo Smith', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [standardize_initials])
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)

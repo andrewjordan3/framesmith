@@ -10,6 +10,7 @@ from framesmith._internal import (
     DEFAULT_CREDENTIALS,
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
+    STANDALONE_INITIAL_PATTERN,
     TRAILING_JR_PATTERN,
 )
 from framesmith.types import ExpressionTransform
@@ -21,6 +22,7 @@ __all__: list[str] = [
     'extract_email_local_part',
     'remove_credentials',
     'remove_jr_suffix',
+    'standardize_initials',
     'strip_name_prefixes',
     'strip_name_suffixes',
 ]
@@ -204,3 +206,25 @@ def remove_credentials(
         return expr.str.replace(pattern, '')
 
     return _remove_credentials
+
+
+def standardize_initials(expr: pl.Expr) -> pl.Expr:
+    """Normalize single-letter initials to 'J. R.' form (letter, period, space).
+
+    Rewrites each standalone single-letter initial — however it is
+    separated by periods and/or spaces — to a consistent letter-period-
+    space form, so ``"J. R. Smith"``, ``"J R Smith"``, and ``"J.R. Smith"``
+    all become ``"J. R. Smith"``.
+
+    Only standalone single letters are treated as initials: a multi-letter
+    token like ``"Jo"`` or ``"Smith"`` is left untouched, and a glued pair
+    like ``"JR"`` is left as-is — it cannot be safely distinguished from a
+    name or the ``Jr`` suffix. Case is preserved (``"j. r."`` stays
+    lowercase).
+
+    Atomic: removes/normalizes only the initial formatting and does not
+    strip ends, so an initial that ends the string leaves a trailing space
+    (``"Smith, J."`` → ``"Smith, J. "``); compose :func:`strip_whitespace`
+    to tidy. Nulls pass through.
+    """
+    return expr.str.replace_all(STANDALONE_INITIAL_PATTERN, '$1. ')
