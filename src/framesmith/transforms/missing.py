@@ -13,7 +13,7 @@ given token means "missing" depends entirely on the data, and
 defaulting it on risks silently nulling valid values (e.g. ``'NA'`` as
 Namibia). Add it to your own recipe explicitly::
 
-    recipe = (*NORMALIZE_TEXT, nullify_sentinels(DEFAULT_MISSING_SENTINELS))
+    recipe = (*TEXT_NORMALIZE, nullify_sentinels(DEFAULT_MISSING_SENTINELS))
 """
 
 from collections.abc import Collection

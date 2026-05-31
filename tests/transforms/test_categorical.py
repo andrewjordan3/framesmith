@@ -11,7 +11,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from framesmith import NORMALIZE_TEXT, ExpressionTransform, compose_column
+from framesmith import TEXT_NORMALIZE, ExpressionTransform, compose_column
 from framesmith.transforms import (
     collapse_keep_top_n,
     collapse_rare_by_count,
@@ -200,10 +200,10 @@ class TestCollapseKeepTopN:
 
 class TestComposabilityWithNormalizeText:
     def test_canonicalization_before_counting(self) -> None:
-        # NORMALIZE_TEXT strips the padded ' ACME ' to 'ACME' before the
+        # TEXT_NORMALIZE strips the padded ' ACME ' to 'ACME' before the
         # collapse counts, so it merges with the bare 'ACME' (count 3);
         # 'Beta' (count 2) is kept; 'Gamma' (count 1) collapses.
-        recipe = (*NORMALIZE_TEXT, collapse_rare_by_count(2))
+        recipe = (*TEXT_NORMALIZE, collapse_rare_by_count(2))
         df = pl.DataFrame(
             {'x': [' ACME ', 'ACME', 'ACME', 'Beta', 'Beta', 'Gamma']},
             schema={'x': pl.String},

@@ -12,21 +12,21 @@ import logging
 
 from framesmith.compose import compose_column
 from framesmith.recipes import (
-    CLEAN_NUMERIC_STRING,
     EMAIL_TO_DISPLAY_NAME,
-    NORMALIZE_NUMERIC,
-    NORMALIZE_PERCENT,
-    NORMALIZE_TEXT,
+    NUMERIC_STRING_NORMALIZE,
+    NUMERIC_STRING_TO_FLOAT,
+    PERCENT_STRING_TO_FRACTION,
+    TEXT_NORMALIZE,
     UNICODE_TO_ASCII,
 )
 from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
-    'CLEAN_NUMERIC_STRING',
     'EMAIL_TO_DISPLAY_NAME',
-    'NORMALIZE_NUMERIC',
-    'NORMALIZE_PERCENT',
-    'NORMALIZE_TEXT',
+    'NUMERIC_STRING_NORMALIZE',
+    'NUMERIC_STRING_TO_FLOAT',
+    'PERCENT_STRING_TO_FRACTION',
+    'TEXT_NORMALIZE',
     'UNICODE_TO_ASCII',
     'ExpressionTransform',
     'compose_column',

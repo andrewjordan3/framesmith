@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from framesmith import NORMALIZE_TEXT, ExpressionTransform, compose_column
+from framesmith import TEXT_NORMALIZE, ExpressionTransform, compose_column
 from framesmith.transforms import DEFAULT_MISSING_SENTINELS, nullify_sentinels
 
 
@@ -200,14 +200,14 @@ class TestFactoryContract:
 
 
 # ---------------------------------------------------------------------
-# Composability with NORMALIZE_TEXT
+# Composability with TEXT_NORMALIZE
 # ---------------------------------------------------------------------
 
 
-class TestComposabilityWithNormalizeText:
-    def test_normalize_text_then_nullify_sentinels(self) -> None:
+class TestComposabilityWithTextNormalize:
+    def test_text_normalize_then_nullify_sentinels(self) -> None:
         recipe = (
-            *NORMALIZE_TEXT,
+            *TEXT_NORMALIZE,
             nullify_sentinels(DEFAULT_MISSING_SENTINELS),
         )
         df = pl.DataFrame(
@@ -216,7 +216,7 @@ class TestComposabilityWithNormalizeText:
         )
         result = df.with_columns(compose_column('x', recipe))
         # 'Sales & Service' is normalized; 'N/A' is nullified;
-        # blank-only is nullified by NORMALIZE_TEXT's nullify_blank_strings.
+        # blank-only is nullified by TEXT_NORMALIZE's nullify_blank_strings.
         assert result['x'].to_list() == [
             'Sales and Service',
             None,

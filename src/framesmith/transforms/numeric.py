@@ -37,7 +37,7 @@ def accounting_parens_to_negative(expr: pl.Expr) -> pl.Expr:
 
     Atomic: rewrites only the parens-to-minus structure. Does NOT strip
     currency, commas, or whitespace. In isolation, ``"($1,234)"`` →
-    ``"-$1,234"``; inside the ``NORMALIZE_NUMERIC`` recipe,
+    ``"-$1,234"``; inside the ``NUMERIC_STRING_TO_FLOAT`` recipe,
     ``fold_to_ascii`` has already removed the currency symbol before
     this runs. Non-parenthesized values and nulls pass through
     unchanged.
@@ -95,7 +95,7 @@ def percent_to_fraction(expr: pl.Expr) -> pl.Expr:
 
     Assumes pre-cleaned input. Standalone use on whitespace-padded or
     comma-containing strings will mis-parse; in the recipe context
-    ``CLEAN_NUMERIC_STRING`` runs first and normalizes both.
+    ``NUMERIC_STRING_NORMALIZE`` runs first and normalizes both.
     Unparseable strings (including bare ``'%'`` and the empty string)
     become null. Nulls pass through unchanged.
     """

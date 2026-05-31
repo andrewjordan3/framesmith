@@ -1,11 +1,10 @@
 # tests/test_recipes.py
 """Tests for ``framesmith.recipes``.
 
-Faithfulness suite: ``NORMALIZE_TEXT`` composed via ``compose_column``
-must reproduce the legacy ``normalize_text`` behavior exactly on every
-documented input/output pair. Lines that embed visually ambiguous
-Unicode characters carry an inline ``# noqa: RUF001`` — the ambiguity
-is what the test exercises.
+Faithfulness suite: ``TEXT_NORMALIZE`` composed via ``compose_column`` must
+reproduce its documented input/output behavior exactly on every pair. Lines
+that embed visually ambiguous Unicode characters carry an inline
+``# noqa: RUF001`` — the ambiguity is what the test exercises.
 """
 
 from collections.abc import Sequence
@@ -15,16 +14,28 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from framesmith import (
-    CLEAN_NUMERIC_STRING,
     EMAIL_TO_DISPLAY_NAME,
-    NORMALIZE_NUMERIC,
-    NORMALIZE_PERCENT,
-    NORMALIZE_TEXT,
+    NUMERIC_STRING_NORMALIZE,
+    NUMERIC_STRING_TO_FLOAT,
+    PERCENT_STRING_TO_FRACTION,
+    TEXT_NORMALIZE,
     UNICODE_TO_ASCII,
     ExpressionTransform,
     compose_column,
+    recipes,
 )
-from framesmith.recipes import SNAKE_TO_TITLE
+from framesmith.recipes import (
+    CATEGORY_CANONICALIZE,
+    CATEGORY_CANONICALIZE_TO_SNAKE_CASE,
+    PERSON_NAME_NORMALIZE,
+    PERSON_NAME_NORMALIZE_TO_SNAKE_CASE,
+    SNAKE_CASE_TO_TITLE,
+    STREET_ADDRESS_NORMALIZE,
+    STREET_ADDRESS_NORMALIZE_TO_SNAKE_CASE,
+    TEXT_CANONICALIZE,
+    TEXT_NORMALIZE_TO_SNAKE_CASE,
+    WHITESPACE_CANONICALIZE,
+)
 from framesmith.transforms import (
     accounting_parens_to_negative,
     apply_replacements,
@@ -34,13 +45,16 @@ from framesmith.transforms import (
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    nullify_sentinels,
     percent_to_fraction,
     periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     remove_thousands_separators,
     replace_ampersand_with_and,
+    standardize_initials,
     strip_whitespace,
+    to_lowercase,
     to_snake_case,
     to_titlecase,
     trailing_minus_to_prefix,
@@ -57,11 +71,11 @@ def _apply(
 
 
 # ---------------------------------------------------------------------
-# NORMALIZE_TEXT faithfulness: ported from the legacy normalize_text suite
+# TEXT_NORMALIZE faithfulness
 # ---------------------------------------------------------------------
 
 
-class TestNormalizeTextFaithfulnessNfkc:
+class TestTextNormalizeFaithfulnessNfkc:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -74,11 +88,11 @@ class TestNormalizeTextFaithfulnessNfkc:
         ],
     )
     def test_nfkc_normalization(self, value: str, expected: str) -> None:
-        result = _apply([value], NORMALIZE_TEXT)
+        result = _apply([value], TEXT_NORMALIZE)
         assert result.to_list() == [expected]
 
 
-class TestNormalizeTextFaithfulnessAsciiFolding:
+class TestTextNormalizeFaithfulnessAsciiFolding:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -99,70 +113,217 @@ class TestNormalizeTextFaithfulnessAsciiFolding:
         ],
     )
     def test_ascii_compat_folding(self, value: str, expected: str) -> None:
-        result = _apply([value], NORMALIZE_TEXT)
+        result = _apply([value], TEXT_NORMALIZE)
         assert result.to_list() == [expected]
 
     def test_trademark_decomposes_to_tm_via_nfkc(self) -> None:
         # NFKC decomposes ™ into the letters TM before the ASCII map
         # ever runs; the map never sees U+2122. Locked in here.
-        result = _apply(['Brand™'], NORMALIZE_TEXT)
+        result = _apply(['Brand™'], TEXT_NORMALIZE)
         assert result.to_list() == ['BrandTM']
 
 
-class TestNormalizeTextFaithfulnessWhitespace:
+class TestTextNormalizeFaithfulnessWhitespace:
     def test_tabs_become_spaces(self) -> None:
-        result = _apply(['a\tb'], NORMALIZE_TEXT)
+        result = _apply(['a\tb'], TEXT_NORMALIZE)
         assert result.to_list() == ['a b']
 
     def test_no_break_space_becomes_space(self) -> None:
         # U+00A0 NO-BREAK SPACE between 'a' and 'b'.
-        result = _apply(['a b'], NORMALIZE_TEXT)
+        result = _apply(['a b'], TEXT_NORMALIZE)
         assert result.to_list() == ['a b']
 
     def test_multiple_spaces_collapsed(self) -> None:
-        result = _apply(['a   b'], NORMALIZE_TEXT)
+        result = _apply(['a   b'], TEXT_NORMALIZE)
         assert result.to_list() == ['a b']
 
     def test_leading_and_trailing_whitespace_stripped(self) -> None:
-        result = _apply(['  hello  '], NORMALIZE_TEXT)
+        result = _apply(['  hello  '], TEXT_NORMALIZE)
         assert result.to_list() == ['hello']
 
 
-class TestNormalizeTextFaithfulnessAmpersand:
+class TestTextNormalizeFaithfulnessAmpersand:
     def test_ampersand_expanded(self) -> None:
-        result = _apply(['Sales & Service'], NORMALIZE_TEXT)
+        result = _apply(['Sales & Service'], TEXT_NORMALIZE)
         assert result.to_list() == ['Sales and Service']
 
     def test_ampersand_expansion_preserves_case(self) -> None:
-        result = _apply(['SALES & SERVICE'], NORMALIZE_TEXT)
+        result = _apply(['SALES & SERVICE'], TEXT_NORMALIZE)
         assert result.to_list() == ['SALES and SERVICE']
 
 
-class TestNormalizeTextFaithfulnessApostropheAndPeriod:
+class TestTextNormalizeFaithfulnessApostropheAndPeriod:
     def test_apostrophe_removed(self) -> None:
-        result = _apply(["O'Brien"], NORMALIZE_TEXT)
+        result = _apply(["O'Brien"], TEXT_NORMALIZE)
         assert result.to_list() == ['OBrien']
 
     def test_period_removed(self) -> None:
-        result = _apply(['St.'], NORMALIZE_TEXT)
+        result = _apply(['St.'], TEXT_NORMALIZE)
         assert result.to_list() == ['St']
 
     def test_smart_apostrophe_removed(self) -> None:
         # U+2019 folds to ASCII apostrophe via UNICODE_TO_ASCII, then
         # is stripped by remove_apostrophes.
-        result = _apply(['O’Brien'], NORMALIZE_TEXT)  # noqa: RUF001
+        result = _apply(['O’Brien'], TEXT_NORMALIZE)  # noqa: RUF001
         assert result.to_list() == ['OBrien']
 
 
-class TestNormalizeTextFaithfulnessNullSemantics:
+class TestTextNormalizeFaithfulnessNullSemantics:
     def test_null_propagates(self) -> None:
-        result = _apply([None], NORMALIZE_TEXT)
+        result = _apply([None], TEXT_NORMALIZE)
         assert result.to_list() == [None]
 
     @pytest.mark.parametrize('value', ['', ' ', '   ', '\t', '\n', ' \t\n '])
     def test_blank_or_whitespace_only_becomes_null(self, value: str) -> None:
-        result = _apply([value], NORMALIZE_TEXT)
+        result = _apply([value], TEXT_NORMALIZE)
         assert result.to_list() == [None]
+
+
+# ---------------------------------------------------------------------
+# TEXT_CANONICALIZE: tidy-up without punctuation stripping
+# ---------------------------------------------------------------------
+
+
+class TestTextCanonicalize:
+    def test_preserves_apostrophe_unlike_normalize(self) -> None:
+        # The divergence between the two: canonicalize keeps the
+        # apostrophe; normalize strips it.
+        assert _apply(["O'Brien"], TEXT_CANONICALIZE).to_list() == ["O'Brien"]
+        assert _apply(["O'Brien"], TEXT_NORMALIZE).to_list() == ['OBrien']
+
+    def test_canonicalizes_unicode_and_whitespace(self) -> None:
+        result = _apply(['  “A—B”  '], TEXT_CANONICALIZE)
+        assert result.to_list() == ['"A-B"']
+
+    def test_blank_becomes_null(self) -> None:
+        assert _apply(['   '], TEXT_CANONICALIZE).to_list() == [None]
+
+
+# ---------------------------------------------------------------------
+# WHITESPACE_CANONICALIZE
+# ---------------------------------------------------------------------
+
+
+class TestWhitespaceCanonicalize:
+    def test_tidies_whitespace_and_nullifies_blanks(self) -> None:
+        result = _apply(['  a   b  ', '   ', '', 'x', None], WHITESPACE_CANONICALIZE)
+        assert result.to_list() == ['a b', None, None, 'x', None]
+
+
+# ---------------------------------------------------------------------
+# CATEGORY_CANONICALIZE
+# ---------------------------------------------------------------------
+
+
+class TestCategoryCanonicalize:
+    def test_merges_spelling_variants(self) -> None:
+        result = _apply(
+            [' Active ', 'ACTIVE', 'In  Progress', '  ', None],
+            CATEGORY_CANONICALIZE,
+        )
+        assert result.to_list() == ['active', 'active', 'in progress', None, None]
+
+    def test_snake_case_variant(self) -> None:
+        result = _apply([' In Progress '], CATEGORY_CANONICALIZE_TO_SNAKE_CASE)
+        assert result.to_list() == ['in_progress']
+
+
+# ---------------------------------------------------------------------
+# STREET_ADDRESS_NORMALIZE
+# ---------------------------------------------------------------------
+
+
+class TestStreetAddressNormalize:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('123 North Main Street', '123 N Main ST'),
+            ('  456   south oak ave  ', '456 S oak AVE'),
+            ('789 SE Grand Blvd Apartment 4', '789 SE Grand BLVD APT 4'),
+        ],
+    )
+    def test_standardizes_usps_tokens(self, value: str, expected: str) -> None:
+        result = _apply([value], STREET_ADDRESS_NORMALIZE)
+        assert result.to_list() == [expected]
+
+    def test_snake_case_variant(self) -> None:
+        result = _apply(
+            ['123 North Main Street'], STREET_ADDRESS_NORMALIZE_TO_SNAKE_CASE
+        )
+        assert result.to_list() == ['123_n_main_st']
+
+    def test_null_propagates(self) -> None:
+        assert _apply([None], STREET_ADDRESS_NORMALIZE).to_list() == [None]
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    '123 North Main Street',
+                    '  456   south oak ave  ',
+                    '789 SE Grand Blvd Apartment 4',
+                    '   ',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', STREET_ADDRESS_NORMALIZE)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# PERSON_NAME_NORMALIZE
+# ---------------------------------------------------------------------
+
+
+class TestPersonNameNormalize:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('Dr. John  Smith Jr, PhD', 'John Smith'),
+            ('  Mrs. Jane Doe  ', 'Jane Doe'),
+            ('Smith, J.R.', 'Smith, J. R.'),
+            # No comma: credentials are not stripped.
+            ('John Smith MD', 'John Smith MD'),
+        ],
+    )
+    def test_strips_affixes_and_standardizes(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], PERSON_NAME_NORMALIZE)
+        assert result.to_list() == [expected]
+
+    def test_snake_case_variant(self) -> None:
+        result = _apply(
+            ['Dr. John Smith Jr'], PERSON_NAME_NORMALIZE_TO_SNAKE_CASE
+        )
+        assert result.to_list() == ['john_smith']
+
+    @pytest.mark.parametrize('value', ['', '   ', None])
+    def test_blank_and_null_become_null(self, value: str | None) -> None:
+        assert _apply([value], PERSON_NAME_NORMALIZE).to_list() == [None]
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    'Dr. John  Smith Jr, PhD',
+                    '  Mrs. Jane Doe  ',
+                    'Smith, J.R.',
+                    'John Smith MD',
+                    '   ',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', PERSON_NAME_NORMALIZE)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
 
 
 # ---------------------------------------------------------------------
@@ -188,18 +349,12 @@ class TestUnicodeToAscii:
 # ---------------------------------------------------------------------
 
 
-# Top-level recipe so the test body stays readable and no inline tuple
-# literal appears in the compose_column call.
-NORMALIZE_THEN_SNAKE: tuple[ExpressionTransform, ...] = (
-    *NORMALIZE_TEXT,
-    to_snake_case,
-)
-
-
 class TestRecipeComposability:
-    def test_normalize_text_spliced_with_to_snake_case(self) -> None:
+    def test_text_normalize_spliced_with_to_snake_case(self) -> None:
         df = pl.DataFrame({'x': ['Sales & Service']})
-        result = df.with_columns(compose_column('x', NORMALIZE_THEN_SNAKE))
+        result = df.with_columns(
+            compose_column('x', TEXT_NORMALIZE_TO_SNAKE_CASE)
+        )
         assert result['x'].to_list() == ['sales_and_service']
 
 
@@ -209,7 +364,7 @@ class TestRecipeComposability:
 
 
 class TestLazyEagerEquivalence:
-    def test_normalize_text_lazy_matches_eager(self) -> None:
+    def test_text_normalize_lazy_matches_eager(self) -> None:
         df = pl.DataFrame(
             {
                 'x': [
@@ -222,43 +377,65 @@ class TestLazyEagerEquivalence:
             },
             schema={'x': pl.String},
         )
-        expr = compose_column('x', NORMALIZE_TEXT)
+        expr = compose_column('x', TEXT_NORMALIZE)
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
 
 
 # ---------------------------------------------------------------------
-# Recipe structure / type invariants
+# Recipe structure / type invariants and splice locks
 # ---------------------------------------------------------------------
 
 
 class TestRecipeStructure:
-    def test_normalize_text_is_tuple_not_list(self) -> None:
-        assert isinstance(NORMALIZE_TEXT, tuple)
-        assert not isinstance(NORMALIZE_TEXT, list)
+    def test_text_normalize_is_tuple_not_list(self) -> None:
+        assert isinstance(TEXT_NORMALIZE, tuple)
+        assert not isinstance(TEXT_NORMALIZE, list)
 
     def test_unicode_to_ascii_is_tuple_not_list(self) -> None:
         assert isinstance(UNICODE_TO_ASCII, tuple)
         assert not isinstance(UNICODE_TO_ASCII, list)
 
-    def test_normalize_text_starts_with_nullify_then_unicode_to_ascii(
+    def test_text_normalize_starts_with_text_canonicalize(self) -> None:
+        # Locks in the extraction: TEXT_NORMALIZE must begin with
+        # TEXT_CANONICALIZE's transforms in order. If a future edit drops
+        # the splice, this test fires.
+        assert TEXT_NORMALIZE[: len(TEXT_CANONICALIZE)] == TEXT_CANONICALIZE
+
+    def test_text_canonicalize_starts_with_nullify_then_unicode_to_ascii(
         self,
     ) -> None:
-        # Locks in the splice: NORMALIZE_TEXT must include
-        # UNICODE_TO_ASCII's transforms in sequence right after
-        # nullify_blank_strings. If a future edit drops the splice,
-        # this test fires.
-        assert NORMALIZE_TEXT[0] is nullify_blank_strings
-        assert NORMALIZE_TEXT[1:3] == UNICODE_TO_ASCII
+        assert TEXT_CANONICALIZE[0] is nullify_blank_strings
+        assert TEXT_CANONICALIZE[1:3] == UNICODE_TO_ASCII
+
+    @pytest.mark.parametrize(
+        ('snake_recipe', 'base_recipe'),
+        [
+            (TEXT_NORMALIZE_TO_SNAKE_CASE, TEXT_NORMALIZE),
+            (CATEGORY_CANONICALIZE_TO_SNAKE_CASE, CATEGORY_CANONICALIZE),
+            (STREET_ADDRESS_NORMALIZE_TO_SNAKE_CASE, STREET_ADDRESS_NORMALIZE),
+            (PERSON_NAME_NORMALIZE_TO_SNAKE_CASE, PERSON_NAME_NORMALIZE),
+        ],
+    )
+    def test_snake_variant_is_base_then_to_snake_case(
+        self,
+        snake_recipe: tuple[ExpressionTransform, ...],
+        base_recipe: tuple[ExpressionTransform, ...],
+    ) -> None:
+        # Each _TO_SNAKE_CASE recipe is exactly its base spliced in front
+        # of to_snake_case. The prefix == works because splicing reuses
+        # the identical transform objects.
+        assert snake_recipe[:-1] == base_recipe
+        assert snake_recipe[-1] is to_snake_case
 
 
 # ---------------------------------------------------------------------
-# NORMALIZE_NUMERIC end-to-end
+# NUMERIC_STRING_TO_FLOAT end-to-end
 # ---------------------------------------------------------------------
 
 
-class TestNormalizeNumeric:
+class TestNumericStringToFloat:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -275,40 +452,40 @@ class TestNormalizeNumeric:
     def test_parses_messy_numeric_strings(
         self, value: str, expected: float
     ) -> None:
-        result = _apply([value], NORMALIZE_NUMERIC)
+        result = _apply([value], NUMERIC_STRING_TO_FLOAT)
         assert result.to_list() == [expected]
 
     @pytest.mark.parametrize('value', ['', '   ', 'abc'])
     def test_unparseable_becomes_null(self, value: str) -> None:
-        result = _apply([value], NORMALIZE_NUMERIC)
+        result = _apply([value], NUMERIC_STRING_TO_FLOAT)
         assert result.to_list() == [None]
 
     def test_null_propagates(self) -> None:
-        result = _apply([None], NORMALIZE_NUMERIC)
+        result = _apply([None], NUMERIC_STRING_TO_FLOAT)
         assert result.to_list() == [None]
 
     def test_output_dtype_is_float64(self) -> None:
-        result = _apply(['123.45'], NORMALIZE_NUMERIC)
+        result = _apply(['123.45'], NUMERIC_STRING_TO_FLOAT)
         assert result.dtype == pl.Float64
 
 
 # ---------------------------------------------------------------------
-# CLEAN_NUMERIC_STRING (string output, caller casts)
+# NUMERIC_STRING_NORMALIZE (string output, caller casts)
 # ---------------------------------------------------------------------
 
 
-class TestCleanNumericString:
+class TestNumericStringNormalize:
     def test_cleans_to_bare_numeric_string(self) -> None:
-        result = _apply(['($1,234.56)'], CLEAN_NUMERIC_STRING)
+        result = _apply(['($1,234.56)'], NUMERIC_STRING_NORMALIZE)
         assert result.to_list() == ['-1234.56']
 
     def test_output_dtype_is_still_string(self) -> None:
-        result = _apply(['($1,234.56)'], CLEAN_NUMERIC_STRING)
+        result = _apply(['($1,234.56)'], NUMERIC_STRING_NORMALIZE)
         assert result.dtype == pl.String
 
     def test_caller_can_cast_to_int64(self) -> None:
         df = pl.DataFrame({'x': ['1,234']}, schema={'x': pl.String})
-        expr = compose_column('x', CLEAN_NUMERIC_STRING).cast(
+        expr = compose_column('x', NUMERIC_STRING_NORMALIZE).cast(
             pl.Int64, strict=False
         )
         result = df.with_columns(expr)
@@ -322,35 +499,37 @@ class TestCleanNumericString:
 
 
 class TestNumericRecipeStructure:
-    def test_normalize_numeric_is_tuple_not_list(self) -> None:
-        assert isinstance(NORMALIZE_NUMERIC, tuple)
-        assert not isinstance(NORMALIZE_NUMERIC, list)
+    def test_numeric_string_to_float_is_tuple_not_list(self) -> None:
+        assert isinstance(NUMERIC_STRING_TO_FLOAT, tuple)
+        assert not isinstance(NUMERIC_STRING_TO_FLOAT, list)
 
-    def test_clean_numeric_string_is_tuple_not_list(self) -> None:
-        assert isinstance(CLEAN_NUMERIC_STRING, tuple)
-        assert not isinstance(CLEAN_NUMERIC_STRING, list)
+    def test_numeric_string_normalize_is_tuple_not_list(self) -> None:
+        assert isinstance(NUMERIC_STRING_NORMALIZE, tuple)
+        assert not isinstance(NUMERIC_STRING_NORMALIZE, list)
 
-    def test_normalize_numeric_splices_clean_numeric_string_then_casts(
+    def test_numeric_string_to_float_splices_normalize_then_casts(
         self,
     ) -> None:
-        # Locks in the splice: NORMALIZE_NUMERIC must be
-        # CLEAN_NUMERIC_STRING followed by cast_to_float64.
-        assert NORMALIZE_NUMERIC[:-1] == CLEAN_NUMERIC_STRING
-        assert NORMALIZE_NUMERIC[-1] is cast_to_float64
+        # Locks in the splice: NUMERIC_STRING_TO_FLOAT must be
+        # NUMERIC_STRING_NORMALIZE followed by cast_to_float64.
+        assert NUMERIC_STRING_TO_FLOAT[:-1] == NUMERIC_STRING_NORMALIZE
+        assert NUMERIC_STRING_TO_FLOAT[-1] is cast_to_float64
 
-    def test_clean_numeric_string_starts_with_unicode_to_ascii(self) -> None:
+    def test_numeric_string_normalize_starts_with_unicode_to_ascii(
+        self,
+    ) -> None:
         # Locks in the splice: the Unicode handling for numerics is
         # delegated to UNICODE_TO_ASCII and lives in one place.
-        assert CLEAN_NUMERIC_STRING[:2] == UNICODE_TO_ASCII
+        assert NUMERIC_STRING_NORMALIZE[:2] == UNICODE_TO_ASCII
 
 
 # ---------------------------------------------------------------------
-# Lazy / eager equivalence for NORMALIZE_NUMERIC
+# Lazy / eager equivalence for NUMERIC_STRING_TO_FLOAT
 # ---------------------------------------------------------------------
 
 
-class TestNormalizeNumericLazyEagerEquivalence:
-    def test_normalize_numeric_lazy_matches_eager(self) -> None:
+class TestNumericStringToFloatLazyEagerEquivalence:
+    def test_numeric_string_to_float_lazy_matches_eager(self) -> None:
         df = pl.DataFrame(
             {
                 'x': [
@@ -364,7 +543,7 @@ class TestNormalizeNumericLazyEagerEquivalence:
             },
             schema={'x': pl.String},
         )
-        expr = compose_column('x', NORMALIZE_NUMERIC)
+        expr = compose_column('x', NUMERIC_STRING_TO_FLOAT)
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
@@ -378,14 +557,65 @@ class TestNormalizeNumericLazyEagerEquivalence:
 class TestNoSentinelNullificationInDefaultRecipes:
     """Regression guard for the opt-in property of ``nullify_sentinels``.
 
-    Sentinel handling depends on the data source — defaulting it on
-    would silently null valid values (e.g. ``'NA'`` as Namibia). These
-    tests pin the exact transforms in each shipped recipe so a future
-    edit that slips ``nullify_sentinels`` (or any unexpected transform)
-    into a default recipe fires immediately.
+    Sentinel handling depends on the data source — defaulting it on would
+    silently null valid values (e.g. ``'NA'`` as Namibia). These tests pin
+    the exact transforms in each shipped recipe so a future edit that slips
+    ``nullify_sentinels`` (or any unexpected transform) into a default
+    recipe fires immediately. The recipes use ``nullify_blank_strings``,
+    which is a different transform.
     """
 
-    def test_normalize_text_contents_pinned(self) -> None:
+    def test_no_recipe_contains_nullify_sentinels(self) -> None:
+        # Sweep all 16 published recipes, including the factory-closure
+        # ones that the exact-tuple pins below cannot reconstruct.
+        for name in recipes.__all__:
+            recipe = getattr(recipes, name)
+            assert nullify_sentinels not in recipe, name
+
+    def test_published_recipe_names_pinned(self) -> None:
+        # The 16 recipes the module publishes, locked so a rename or
+        # accidental drop fires here.
+        assert recipes.__all__ == [
+            'CATEGORY_CANONICALIZE',
+            'CATEGORY_CANONICALIZE_TO_SNAKE_CASE',
+            'EMAIL_TO_DISPLAY_NAME',
+            'NUMERIC_STRING_NORMALIZE',
+            'NUMERIC_STRING_TO_FLOAT',
+            'PERCENT_STRING_TO_FRACTION',
+            'PERSON_NAME_NORMALIZE',
+            'PERSON_NAME_NORMALIZE_TO_SNAKE_CASE',
+            'SNAKE_CASE_TO_TITLE',
+            'STREET_ADDRESS_NORMALIZE',
+            'STREET_ADDRESS_NORMALIZE_TO_SNAKE_CASE',
+            'TEXT_CANONICALIZE',
+            'TEXT_NORMALIZE',
+            'TEXT_NORMALIZE_TO_SNAKE_CASE',
+            'UNICODE_TO_ASCII',
+            'WHITESPACE_CANONICALIZE',
+        ]
+
+    # --- Exact-tuple pins for the bare-function recipes ---
+
+    def test_whitespace_canonicalize_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            collapse_whitespace,
+            strip_whitespace,
+        ) == WHITESPACE_CANONICALIZE
+
+    def test_unicode_to_ascii_contents_pinned(self) -> None:
+        assert (normalize_unicode_nfkc, fold_to_ascii) == UNICODE_TO_ASCII
+
+    def test_text_canonicalize_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            collapse_whitespace,
+            strip_whitespace,
+        ) == TEXT_CANONICALIZE
+
+    def test_text_normalize_contents_pinned(self) -> None:
         assert (
             nullify_blank_strings,
             normalize_unicode_nfkc,
@@ -395,18 +625,48 @@ class TestNoSentinelNullificationInDefaultRecipes:
             replace_ampersand_with_and,
             remove_apostrophes,
             remove_periods,
-        ) == NORMALIZE_TEXT
+        ) == TEXT_NORMALIZE
 
-    def test_clean_numeric_string_contents_pinned(self) -> None:
+    def test_text_normalize_to_snake_case_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            normalize_unicode_nfkc,
+            fold_to_ascii,
+            collapse_whitespace,
+            strip_whitespace,
+            replace_ampersand_with_and,
+            remove_apostrophes,
+            remove_periods,
+            to_snake_case,
+        ) == TEXT_NORMALIZE_TO_SNAKE_CASE
+
+    def test_category_canonicalize_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            collapse_whitespace,
+            strip_whitespace,
+            to_lowercase,
+        ) == CATEGORY_CANONICALIZE
+
+    def test_category_canonicalize_to_snake_case_contents_pinned(self) -> None:
+        assert (
+            nullify_blank_strings,
+            collapse_whitespace,
+            strip_whitespace,
+            to_lowercase,
+            to_snake_case,
+        ) == CATEGORY_CANONICALIZE_TO_SNAKE_CASE
+
+    def test_numeric_string_normalize_contents_pinned(self) -> None:
         assert (
             normalize_unicode_nfkc,
             fold_to_ascii,
             accounting_parens_to_negative,
             trailing_minus_to_prefix,
             remove_thousands_separators,
-        ) == CLEAN_NUMERIC_STRING
+        ) == NUMERIC_STRING_NORMALIZE
 
-    def test_normalize_numeric_contents_pinned(self) -> None:
+    def test_numeric_string_to_float_contents_pinned(self) -> None:
         assert (
             normalize_unicode_nfkc,
             fold_to_ascii,
@@ -414,12 +674,9 @@ class TestNoSentinelNullificationInDefaultRecipes:
             trailing_minus_to_prefix,
             remove_thousands_separators,
             cast_to_float64,
-        ) == NORMALIZE_NUMERIC
+        ) == NUMERIC_STRING_TO_FLOAT
 
-    def test_unicode_to_ascii_contents_pinned(self) -> None:
-        assert (normalize_unicode_nfkc, fold_to_ascii) == UNICODE_TO_ASCII
-
-    def test_normalize_percent_contents_pinned(self) -> None:
+    def test_percent_string_to_fraction_contents_pinned(self) -> None:
         assert (
             normalize_unicode_nfkc,
             fold_to_ascii,
@@ -427,7 +684,7 @@ class TestNoSentinelNullificationInDefaultRecipes:
             trailing_minus_to_prefix,
             remove_thousands_separators,
             percent_to_fraction,
-        ) == NORMALIZE_PERCENT
+        ) == PERCENT_STRING_TO_FRACTION
 
     def test_email_to_display_name_contents_pinned(self) -> None:
         assert (
@@ -437,16 +694,36 @@ class TestNoSentinelNullificationInDefaultRecipes:
             collapse_whitespace,
         ) == EMAIL_TO_DISPLAY_NAME
 
-    def test_snake_to_title_contents_pinned(self) -> None:
-        assert (underscores_to_spaces, to_titlecase) == SNAKE_TO_TITLE
+    def test_snake_case_to_title_contents_pinned(self) -> None:
+        assert (underscores_to_spaces, to_titlecase) == SNAKE_CASE_TO_TITLE
+
+    # --- Structural pins for the factory-closure recipes ---
+    # standardize_*() and remove_credentials()/strip_name_*() return fresh
+    # closures that no independent construction can equal, so these pin the
+    # canonicalize prefix (== works — splicing reuses the same objects), the
+    # bare-function elements by identity, the length, and callability of the
+    # closure elements. The behavior tests pin that the right standardizers
+    # actually run.
+
+    def test_street_address_normalize_structure_pinned(self) -> None:
+        assert len(STREET_ADDRESS_NORMALIZE) == 6
+        assert STREET_ADDRESS_NORMALIZE[:3] == WHITESPACE_CANONICALIZE
+        assert all(callable(step) for step in STREET_ADDRESS_NORMALIZE[3:])
+
+    def test_person_name_normalize_structure_pinned(self) -> None:
+        assert len(PERSON_NAME_NORMALIZE) == 8
+        assert PERSON_NAME_NORMALIZE[:3] == WHITESPACE_CANONICALIZE
+        assert all(callable(step) for step in PERSON_NAME_NORMALIZE[3:6])
+        assert PERSON_NAME_NORMALIZE[6] is standardize_initials
+        assert PERSON_NAME_NORMALIZE[7] is strip_whitespace
 
 
 # ---------------------------------------------------------------------
-# NORMALIZE_PERCENT end-to-end
+# PERCENT_STRING_TO_FRACTION end-to-end
 # ---------------------------------------------------------------------
 
 
-class TestNormalizePercent:
+class TestPercentStringToFraction:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -467,49 +744,49 @@ class TestNormalizePercent:
     def test_parses_messy_percent_strings(
         self, value: str, expected: float
     ) -> None:
-        result = _apply([value], NORMALIZE_PERCENT)
+        result = _apply([value], PERCENT_STRING_TO_FRACTION)
         assert result.to_list() == [expected]
 
     @pytest.mark.parametrize('value', ['abc%', ''])
     def test_unparseable_becomes_null(self, value: str) -> None:
-        result = _apply([value], NORMALIZE_PERCENT)
+        result = _apply([value], PERCENT_STRING_TO_FRACTION)
         assert result.to_list() == [None]
 
     def test_null_propagates(self) -> None:
-        result = _apply([None], NORMALIZE_PERCENT)
+        result = _apply([None], PERCENT_STRING_TO_FRACTION)
         assert result.to_list() == [None]
 
     def test_output_dtype_is_float64(self) -> None:
-        result = _apply(['12%'], NORMALIZE_PERCENT)
+        result = _apply(['12%'], PERCENT_STRING_TO_FRACTION)
         assert result.dtype == pl.Float64
 
 
 # ---------------------------------------------------------------------
-# NORMALIZE_PERCENT structure / splice locks
+# PERCENT_STRING_TO_FRACTION structure / splice locks
 # ---------------------------------------------------------------------
 
 
-class TestNormalizePercentStructure:
-    def test_normalize_percent_is_tuple_not_list(self) -> None:
-        assert isinstance(NORMALIZE_PERCENT, tuple)
-        assert not isinstance(NORMALIZE_PERCENT, list)
+class TestPercentStringToFractionStructure:
+    def test_percent_string_to_fraction_is_tuple_not_list(self) -> None:
+        assert isinstance(PERCENT_STRING_TO_FRACTION, tuple)
+        assert not isinstance(PERCENT_STRING_TO_FRACTION, list)
 
-    def test_normalize_percent_splices_clean_numeric_string_then_percent(
+    def test_percent_string_to_fraction_splices_normalize_then_percent(
         self,
     ) -> None:
-        # Locks in the splice: NORMALIZE_PERCENT must be
-        # CLEAN_NUMERIC_STRING followed by percent_to_fraction.
-        assert NORMALIZE_PERCENT[:-1] == CLEAN_NUMERIC_STRING
-        assert NORMALIZE_PERCENT[-1] is percent_to_fraction
+        # Locks in the splice: PERCENT_STRING_TO_FRACTION must be
+        # NUMERIC_STRING_NORMALIZE followed by percent_to_fraction.
+        assert PERCENT_STRING_TO_FRACTION[:-1] == NUMERIC_STRING_NORMALIZE
+        assert PERCENT_STRING_TO_FRACTION[-1] is percent_to_fraction
 
 
 # ---------------------------------------------------------------------
-# Lazy / eager equivalence for NORMALIZE_PERCENT
+# Lazy / eager equivalence for PERCENT_STRING_TO_FRACTION
 # ---------------------------------------------------------------------
 
 
-class TestNormalizePercentLazyEagerEquivalence:
-    def test_normalize_percent_lazy_matches_eager(self) -> None:
+class TestPercentStringToFractionLazyEagerEquivalence:
+    def test_percent_string_to_fraction_lazy_matches_eager(self) -> None:
         df = pl.DataFrame(
             {
                 'x': [
@@ -525,7 +802,7 @@ class TestNormalizePercentLazyEagerEquivalence:
             },
             schema={'x': pl.String},
         )
-        expr = compose_column('x', NORMALIZE_PERCENT)
+        expr = compose_column('x', PERCENT_STRING_TO_FRACTION)
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
@@ -553,9 +830,7 @@ class TestEmailToDisplayName:
             ('', ''),
         ],
     )
-    def test_produces_display_name(
-        self, value: str, expected: str
-    ) -> None:
+    def test_produces_display_name(self, value: str, expected: str) -> None:
         result = _apply([value], EMAIL_TO_DISPLAY_NAME)
         assert result.to_list() == [expected]
 
@@ -617,32 +892,31 @@ class TestEmailToDisplayNameLazyEagerEquivalence:
 
 
 # ---------------------------------------------------------------------
-# SNAKE_TO_TITLE end-to-end, structure, and splice
+# SNAKE_CASE_TO_TITLE end-to-end, structure, and splice
 # ---------------------------------------------------------------------
 
 
-class TestSnakeToTitle:
+class TestSnakeCaseToTitle:
     def test_produces_title_label(self) -> None:
-        result = _apply(['john_smith', 'jane_doe'], SNAKE_TO_TITLE)
+        result = _apply(['john_smith', 'jane_doe'], SNAKE_CASE_TO_TITLE)
         assert result.to_list() == ['John Smith', 'Jane Doe']
 
     def test_is_tuple_not_list(self) -> None:
-        assert isinstance(SNAKE_TO_TITLE, tuple)
-        assert not isinstance(SNAKE_TO_TITLE, list)
+        assert isinstance(SNAKE_CASE_TO_TITLE, tuple)
+        assert not isinstance(SNAKE_CASE_TO_TITLE, list)
 
     def test_lazy_matches_eager(self) -> None:
         df = pl.DataFrame(
             {'x': ['john_smith', 'jane_doe', 'primary_lob', None]},
             schema={'x': pl.String},
         )
-        expr = compose_column('x', SNAKE_TO_TITLE)
+        expr = compose_column('x', SNAKE_CASE_TO_TITLE)
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
 
     def test_splice_with_apply_replacements_fixes_acronym(self) -> None:
-        # The snake_to_display equivalent: title-case, then fix the
-        # mangled acronym token in place.
-        recipe = (*SNAKE_TO_TITLE, apply_replacements({'Lob': 'LOB'}))
+        # Title-case, then fix the mangled acronym token in place.
+        recipe = (*SNAKE_CASE_TO_TITLE, apply_replacements({'Lob': 'LOB'}))
         result = _apply(['primary_lob', 'rep_lob'], recipe)
         assert result.to_list() == ['Primary LOB', 'Rep LOB']
