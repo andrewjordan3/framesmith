@@ -66,6 +66,7 @@ from framesmith.transforms.outliers import (
     flag_mad_outliers,
     flag_zscore_outliers,
 )
+from framesmith.transforms.pad import pad_left
 from framesmith.transforms.split import (
     DEFAULT_SPLIT_DELIMITERS,
     split_on_delimiters,
@@ -119,6 +120,7 @@ __all__: list[str] = [
     'normalize_unicode_nfkc',
     'nullify_blank_strings',
     'nullify_sentinels',
+    'pad_left',
     'percent_to_fraction',
     'periods_to_spaces',
     'remove_apostrophes',
