@@ -2,8 +2,9 @@
 """Column-level expression transforms.
 
 Public surface for this subpackage is exported here. Internal file
-organization (``text.py``, ``names.py``, ``numeric.py``, ``missing.py``)
-is private — callers import from ``framesmith.transforms``.
+organization (``whitespace.py``, ``case.py``, ``names.py``,
+``numeric.py``, …) is private — callers import from
+``framesmith.transforms``.
 """
 
 from framesmith.transforms.addresses import (
@@ -21,6 +22,11 @@ from framesmith.transforms.addresses import (
 from framesmith.transforms.bounds import (
     clip_numeric,
     winsorize_numeric,
+)
+from framesmith.transforms.case import (
+    to_lowercase,
+    to_snake_case,
+    to_titlecase,
 )
 from framesmith.transforms.categorical import (
     collapse_keep_top_n,
@@ -64,22 +70,23 @@ from framesmith.transforms.split import (
     DEFAULT_SPLIT_DELIMITERS,
     split_on_delimiters,
 )
-from framesmith.transforms.text import (
+from framesmith.transforms.substitution import (
     apply_replacements,
-    collapse_whitespace,
-    fold_to_ascii,
-    normalize_unicode_nfkc,
-    nullify_blank_strings,
     periods_to_spaces,
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
+    underscores_to_spaces,
+)
+from framesmith.transforms.unicode import (
+    fold_to_ascii,
+    normalize_unicode_nfkc,
+)
+from framesmith.transforms.whitespace import (
+    collapse_whitespace,
+    nullify_blank_strings,
     replace_whitespace_with,
     strip_whitespace,
-    to_lowercase,
-    to_snake_case,
-    to_titlecase,
-    underscores_to_spaces,
 )
 
 __all__: list[str] = [
