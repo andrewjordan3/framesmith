@@ -1,5 +1,6 @@
 # framesmith
 
+[![CI](https://github.com/andrewjordan3/framesmith/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewjordan3/framesmith/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Polars](https://img.shields.io/badge/polars-1.0%2B-CD792C.svg)](https://pola.rs)
