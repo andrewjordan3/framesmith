@@ -125,21 +125,21 @@ class TestUnderscoresToSpaces:
 
 class TestApplyReplacements:
     def test_single_replacement(self) -> None:
-        transform = apply_replacements({'Lob': 'LOB'})
-        result = _apply(['Primary Lob'], transform)
-        assert result.to_list() == ['Primary LOB']
+        transform = apply_replacements({'Nasa': 'NASA'})
+        result = _apply(['Nasa program'], transform)
+        assert result.to_list() == ['NASA program']
 
     def test_multiple_keys(self) -> None:
-        transform = apply_replacements({'Lob': 'LOB', 'Ccms': 'CCMS'})
-        result = _apply(['Ccms Lob'], transform)
-        assert result.to_list() == ['CCMS LOB']
+        transform = apply_replacements({'Nasa': 'NASA', 'Esa': 'ESA'})
+        result = _apply(['Esa Nasa'], transform)
+        assert result.to_list() == ['ESA NASA']
 
     def test_substring_over_match_documented(self) -> None:
-        # Literal substring, not word-boundary: 'Lob' inside 'Lobster'
+        # Literal substring, not word-boundary: 'Nasa' inside 'Nasal'
         # is rewritten too. This is the documented caveat.
-        transform = apply_replacements({'Lob': 'LOB'})
-        result = _apply(['Lobster'], transform)
-        assert result.to_list() == ['LOBster']
+        transform = apply_replacements({'Nasa': 'NASA'})
+        result = _apply(['Nasal'], transform)
+        assert result.to_list() == ['NASAl']
 
     def test_empty_map_raises(self) -> None:
         with pytest.raises(
@@ -151,15 +151,15 @@ class TestApplyReplacements:
         assert callable(apply_replacements({'a': 'b'}))
 
     def test_null_propagates(self) -> None:
-        transform = apply_replacements({'Lob': 'LOB'})
+        transform = apply_replacements({'Nasa': 'NASA'})
         result = _apply([None], transform)
         assert result.to_list() == [None]
 
     def test_lazy_and_eager_produce_identical_results(self) -> None:
         df = pl.DataFrame(
-            {'x': ['Primary Lob', 'Lobster', None]}, schema={'x': pl.String}
+            {'x': ['Nasa program', 'Nasal', None]}, schema={'x': pl.String}
         )
-        transform = apply_replacements({'Lob': 'LOB'})
+        transform = apply_replacements({'Nasa': 'NASA'})
         expr = compose_column('x', [transform])
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()

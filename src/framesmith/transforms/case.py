@@ -40,9 +40,10 @@ def to_titlecase(expr: pl.Expr) -> pl.Expr:
     strip, collapse, or replace separators.
 
     Known limit: title casing lowercases the tail of every word, so it
-    mangles acronyms — ``'rep lob'`` → ``'Rep Lob'``, not ``'Rep LOB'``.
-    Fix specific tokens afterward with :func:`apply_replacements`
-    (e.g. ``{'Lob': 'LOB'}``). Nulls pass through unchanged.
+    mangles acronyms — ``'nasa program'`` → ``'Nasa Program'``, not
+    ``'NASA Program'``. Fix specific tokens afterward with
+    :func:`apply_replacements` (e.g. ``{'Nasa': 'NASA'}``). Nulls pass
+    through unchanged.
     """
     return expr.str.to_titlecase()
 

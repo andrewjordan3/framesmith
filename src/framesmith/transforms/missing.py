@@ -86,11 +86,15 @@ def nullify_sentinels(
     Example:
         >>> import polars as pl
         >>> import framesmith as fs
+        >>> from framesmith.transforms import (
+        ...     DEFAULT_MISSING_SENTINELS,
+        ...     nullify_sentinels,
+        ... )
         >>> df = pl.DataFrame({'x': ['ok', 'N/A', 'null', 'Chicago']})
         >>> df.with_columns(
         ...     fs.compose_column(
         ...         'x',
-        ...         [fs.nullify_sentinels(fs.DEFAULT_MISSING_SENTINELS)],
+        ...         [nullify_sentinels(DEFAULT_MISSING_SENTINELS)],
         ...     )
         ... )['x'].to_list()
         ['ok', None, None, 'Chicago']

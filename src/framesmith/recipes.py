@@ -242,9 +242,9 @@ EMAIL_TO_DISPLAY_NAME: tuple[ExpressionTransform, ...] = (
 
 # Turn a snake_case identifier into a Title Case label: underscores to spaces,
 # then title-case each word. Title casing lowercases the tail of every word, so
-# it mangles acronyms ('primary_lob' -> 'Primary Lob'); splice
+# it mangles acronyms ('nasa_program' -> 'Nasa Program'); splice
 # apply_replacements to fix specific tokens, e.g.
-# (*SNAKE_CASE_TO_TITLE, apply_replacements({'Lob': 'LOB'})).
+# (*SNAKE_CASE_TO_TITLE, apply_replacements({'Nasa': 'NASA'})).
 SNAKE_CASE_TO_TITLE: tuple[ExpressionTransform, ...] = (
     underscores_to_spaces,
     to_titlecase,

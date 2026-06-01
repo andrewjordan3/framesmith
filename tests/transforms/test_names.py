@@ -88,7 +88,8 @@ class TestExtractEmailLocalPart:
         assert result.to_list() == ['']
 
     def test_multiple_at_signs_split_on_first(self) -> None:
-        # Matches the pandas reference: str.split('@', n=1).str[0].
+        # Only the segment before the first '@' is returned; the rest,
+        # including the later '@', is discarded.
         result = _apply(['john@host@subhost'], extract_email_local_part)
         assert result.to_list() == ['john']
 

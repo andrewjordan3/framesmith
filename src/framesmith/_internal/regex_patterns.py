@@ -15,7 +15,7 @@ internally with the Rust ``regex`` crate. Passing a precompiled Python
 ``re.Pattern`` is neither supported nor useful here.
 
 Inline-flag syntax (``(?i)``, ``(?m)``, ``(?s)``) is used for options
-that the legacy ``re`` API exposed via the ``flags=`` keyword, since
+that Python's ``re`` API exposes via the ``flags=`` keyword, since
 polars' regex strings do not take a separate flags argument.
 """
 

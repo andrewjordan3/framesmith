@@ -67,11 +67,11 @@ def apply_replacements(replacements: dict[str, str]) -> ExpressionTransform:
     Each key found anywhere in the string is replaced with its mapped
     value, in one pass (``str.replace_many``). Useful for fixing
     acronyms after title casing, expanding abbreviations, or mapping a
-    controlled vocabulary — e.g. ``apply_replacements({'Lob': 'LOB',
-    'Ccms': 'CCMS'})`` turns ``'Primary Lob'`` into ``'Primary LOB'``.
+    controlled vocabulary — e.g. ``apply_replacements({'Nasa': 'NASA',
+    'Esa': 'ESA'})`` turns ``'Nasa and Esa'`` into ``'NASA and ESA'``.
 
-    Matching is literal substring, not word-boundary: ``{'Lob': 'LOB'}``
-    also rewrites ``'Lobster'`` to ``'LOBster'``. Choose keys that won't
+    Matching is literal substring, not word-boundary: ``{'Nasa': 'NASA'}``
+    also rewrites ``'Nasal'`` to ``'NASAl'``. Choose keys that won't
     collide with substrings you mean to keep. Nulls pass through
     unchanged.
 
@@ -90,10 +90,10 @@ def apply_replacements(replacements: dict[str, str]) -> ExpressionTransform:
         >>> import polars as pl
         >>> from framesmith import compose_column
         >>> from framesmith.transforms import apply_replacements
-        >>> fix = apply_replacements({'Lob': 'LOB'})
-        >>> df = pl.DataFrame({'x': ['Primary Lob', 'Rep Lob']})
+        >>> fix = apply_replacements({'Nasa': 'NASA'})
+        >>> df = pl.DataFrame({'x': ['Nasa program', 'visit Nasa']})
         >>> df.with_columns(compose_column('x', [fix]))['x'].to_list()
-        ['Primary LOB', 'Rep LOB']
+        ['NASA program', 'visit NASA']
     """
     if len(replacements) == 0:
         raise ValueError('replacements must not be empty')

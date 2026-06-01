@@ -84,8 +84,8 @@ class TestToSnakeCase:
         assert to_snake_case.__name__ == 'to_snake_case'
 
     def test_matches_lowercase_then_replace_whitespace(self) -> None:
-        # New faithfulness pin: to_snake_case == to_lowercase composed
-        # with replace_whitespace_with('_'). Inputs include uppercase so
+        # Pin: to_snake_case == to_lowercase composed with
+        # replace_whitespace_with('_'). Inputs include uppercase so
         # the lowercase step is actually exercised.
         underscore = replace_whitespace_with('_')
         inputs = [
@@ -116,8 +116,8 @@ class TestToTitlecase:
     def test_acronym_not_fixed(self) -> None:
         # Documents the known limit: title casing lowercases the tail of
         # each word, so acronyms are mangled. apply_replacements fixes it.
-        result = _apply(['rep lob'], to_titlecase)
-        assert result.to_list() == ['Rep Lob']
+        result = _apply(['nasa program'], to_titlecase)
+        assert result.to_list() == ['Nasa Program']
 
     def test_null_propagates(self) -> None:
         result = _apply([None], to_titlecase)

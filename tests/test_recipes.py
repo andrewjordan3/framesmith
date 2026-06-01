@@ -1,10 +1,10 @@
 # tests/test_recipes.py
 """Tests for ``framesmith.recipes``.
 
-Faithfulness suite: ``TEXT_NORMALIZE`` composed via ``compose_column`` must
-reproduce its documented input/output behavior exactly on every pair. Lines
-that embed visually ambiguous Unicode characters carry an inline
-``# noqa: RUF001`` — the ambiguity is what the test exercises.
+Pins the documented input/output behavior of ``TEXT_NORMALIZE`` and the other
+recipes on representative messy inputs. Lines that embed visually ambiguous
+Unicode characters carry an inline ``# noqa: RUF001`` — the ambiguity is what
+the test exercises.
 """
 
 from collections.abc import Sequence
@@ -71,7 +71,7 @@ def _apply(
 
 
 # ---------------------------------------------------------------------
-# TEXT_NORMALIZE faithfulness
+# TEXT_NORMALIZE behavior
 # ---------------------------------------------------------------------
 
 
@@ -907,7 +907,7 @@ class TestSnakeCaseToTitle:
 
     def test_lazy_matches_eager(self) -> None:
         df = pl.DataFrame(
-            {'x': ['john_smith', 'jane_doe', 'primary_lob', None]},
+            {'x': ['john_smith', 'jane_doe', 'nasa_program', None]},
             schema={'x': pl.String},
         )
         expr = compose_column('x', SNAKE_CASE_TO_TITLE)
@@ -917,6 +917,6 @@ class TestSnakeCaseToTitle:
 
     def test_splice_with_apply_replacements_fixes_acronym(self) -> None:
         # Title-case, then fix the mangled acronym token in place.
-        recipe = (*SNAKE_CASE_TO_TITLE, apply_replacements({'Lob': 'LOB'}))
-        result = _apply(['primary_lob', 'rep_lob'], recipe)
-        assert result.to_list() == ['Primary LOB', 'Rep LOB']
+        recipe = (*SNAKE_CASE_TO_TITLE, apply_replacements({'Nasa': 'NASA'}))
+        result = _apply(['nasa_program', 'visit_nasa'], recipe)
+        assert result.to_list() == ['NASA Program', 'Visit NASA']
