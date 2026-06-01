@@ -51,9 +51,7 @@ def extract_email_local_part(expr: pl.Expr) -> pl.Expr:
     Splits the string on ``'@'`` and returns the first segment. A
     string with no ``'@'`` passes through as-is. A string starting
     with ``'@'`` yields the empty string. Strings with multiple
-    ``'@'`` characters return only the part before the first one,
-    matching the pandas reference behavior of
-    ``str.split('@', n=1).str[0]``.
+    ``'@'`` characters return only the part before the first one.
 
     Atomic: does NOT strip surrounding whitespace, lowercase, or
     further normalize. Compose with :func:`strip_whitespace` upstream

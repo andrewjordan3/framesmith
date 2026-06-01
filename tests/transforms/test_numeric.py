@@ -45,7 +45,7 @@ class TestAccountingParensToNegative:
 
     def test_currency_preserved_in_isolation(self) -> None:
         # Atomic: in isolation, currency survives. Inside
-        # NORMALIZE_NUMERIC, fold_to_ascii has already removed the
+        # NUMERIC_STRING_TO_FLOAT, fold_to_ascii has already removed the
         # currency symbol before this transform runs, so the recipe
         # output is clean. This test documents the atomic behavior.
         result = _apply(['($1,234)'], accounting_parens_to_negative)
