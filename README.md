@@ -8,28 +8,16 @@
 A preprocessing library for cleaning messy data in polars DataFrames.
 Composable atomic transforms, declarative recipes, expression-first design.
 
-## Status
-
-`framesmith` is in alpha. The public surface and API shape may still change as
-new transforms and recipes land. It is not yet published to PyPI; install from
-source while the design settles.
-
-## Why
-
-Real-world data arrives with smart quotes, currency symbols, accounting-style
-parentheses for negatives, mainframe trailing-minus, fullwidth digits, mixed
-whitespace, and placeholder strings that mean "missing." The cleaning code
-for these tends to scatter across notebooks, drift between projects, and
-silently disagree about edge cases.
-
-The design aims for a different shape: tiny, atomic transforms that each do
-one thing; ordered tuples of those transforms ("recipes") that capture common
-pipelines as plain data; and a single composition function that turns a
-column name plus a recipe into a polars expression. Everything returns a
-`pl.Expr` — `framesmith` never mutates a frame on your behalf. The user
-applies the expression via `df.with_columns(...)` or `df.filter(...)`, which
-keeps the library polars-native and lets the same code work eagerly or
-lazily.
+Real-world data arrives dirty — smart quotes, currency symbols, accounting
+parentheses for negatives, mainframe trailing-minus, fullwidth digits,
+inconsistent whitespace, and placeholder strings that quietly mean *missing*.
+framesmith cleans it, and replaces the one-off cleaning code that scatters
+across notebooks and silently disagrees about edge cases. It gives you small,
+single-purpose transforms; named **recipes** that bundle them into reusable
+pipelines as plain data; and one composition function that turns a column name
+and a recipe into a polars expression. Every transform returns a `pl.Expr` and
+never mutates your frame — you apply it with `df.with_columns(...)` or
+`df.filter(...)`, so the same code runs eagerly or lazily.
 
 ## Quick example
 
@@ -74,17 +62,15 @@ df_snake = raw.with_columns(
 
 ## Installation
 
-`framesmith` is not on PyPI. Install from source:
+`framesmith` is not yet on PyPI — install from source:
 
 ```bash
 git clone https://github.com/andrewjordan3/framesmith.git
 cd framesmith
-uv sync --all-extras --group dev   # or: pip install -e '.[pandas,dev]'
+uv sync --group dev   # or: pip install -e '.[dev]'
 ```
 
-The `[pandas]` extra reserves dependencies for a future polars/pandas
-interop layer — the extra exists in `pyproject.toml` so the install path
-stays stable, but the interop module itself has not yet been built.
+It depends only on polars.
 
 ## Key concepts
 

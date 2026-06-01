@@ -79,10 +79,10 @@ Functions over ~50 lines should be split. Orchestrators orchestrate — they cal
 
 ## Configuration and Constants
 
-- Runtime-configurable values → Pydantic models (`frozen=True`, `extra='forbid'`).
-- Immutable data containers → `@dataclass(frozen=True, slots=True)`.
+- Immutable data containers and default sets → `@dataclass(frozen=True, slots=True)`.
 - Column names and categorical values → frozen dataclass classes or `StrEnum`.
 - Config is separate from logic. No hardcoded magic numbers in functions — derive thresholds from data or pull them from config.
+- If a validated runtime-config layer is added later, frozen Pydantic models (`frozen=True`, `extra='forbid'`) are the intended choice — Pydantic is not a current dependency.
 
 ## Error Handling
 
@@ -100,7 +100,7 @@ Functions over ~50 lines should be split. Orchestrators orchestrate — they cal
 
 ## Data and Computation
 
-- Vectorized pandas/numpy — no row-level loops unless mathematically unavoidable.
+- Vectorized polars expressions — no row-level loops or `map_elements` unless mathematically unavoidable.
 - Data-derived thresholds over hardcoded values wherever possible.
 - `logging.getLogger(__name__)` in every module. Levels: `DEBUG` for flow, `INFO` for milestones, `ERROR` with `exc_info=True`.
 
@@ -115,7 +115,6 @@ Functions over ~50 lines should be split. Orchestrators orchestrate — they cal
 - Verbose explicit names: `transaction_record` not `rec`. No single-letter variables.
 - `match`/`case` for multi-branch dispatch over `if`/`elif` chains.
 - Named helper functions over lambdas.
-- `.to_numpy()` not `.values` for pandas Series/DataFrame conversion.
 - Duplicated code gets extracted into shared helpers. If the same logic appears in two places, factor it out.
 
 ## Naming and Imports

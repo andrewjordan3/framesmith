@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "framesmith"
 version = "0.1.0"
-description = "Composable, expression-first preprocessing toolkit for polars DataFrames, with optional pandas interop, pydantic-validated plans, and YAML-configurable pipelines."
+description = "Composable, expression-first preprocessing for polars DataFrames: small atomic transforms, declarative recipes, and one function that composes them onto a column."
 readme = "README.md"
 authors = [{ name = "Andrew Jordan", email = "andrewjordan3@gmail.com" }]
 maintainers = [{ name = "Andrew Jordan", email = "andrewjordan3@gmail.com" }]
@@ -23,7 +23,6 @@ keywords = [
     "expressions",
     "dataframe",
     "pipeline",
-    "pydantic",
 ]
 
 classifiers = [
@@ -41,8 +40,6 @@ classifiers = [
 # Core runtime dependencies
 dependencies = [
     "polars>=1.0.0",
-    "pydantic>=2.5.0",
-    "pyyaml>=6.0.2",
 ]
 
 # Python version requirements
@@ -50,13 +47,6 @@ requires-python = ">=3.12"
 
 # Optional dependency groups
 [project.optional-dependencies]
-# Install with `pip install framesmith[pandas]` to enable the interop
-# layer that converts between polars and pandas via Apache Arrow.
-pandas = [
-    "pandas>=2.2.0",
-    "pyarrow>=14.0.0",
-]
-
 # Mirrored from ``[dependency-groups].dev`` (PEP 735) so that
 # ``pip install -e '.[dev]'`` works for contributors who are not on
 # ``uv``. Both sections must stay in sync — pip ≥ 25.x can read
@@ -68,8 +58,6 @@ dev = [
     "mypy>=1.7.0",
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
-    "pandas_stubs>=2.3.0",
-    "types-pyyaml>=6.0.12",
 ]
 
 [dependency-groups]
@@ -79,8 +67,6 @@ dev = [
     "mypy>=1.7.0",
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
-    "pandas_stubs>=2.3.0",
-    "types-pyyaml>=6.0.12",
 ]
 
 # Project URLs
@@ -185,13 +171,6 @@ warn_unreachable = true
 strict_equality = true
 
 exclude = ["tests/"]
-
-# Ignore missing imports for third-party libraries without stubs.
-# pandas/pyarrow are optional extras — keep the override so the core
-# package type-checks cleanly when they are not installed.
-[[tool.mypy.overrides]]
-module = ["pandas.*", "pyarrow.*"]
-ignore_missing_imports = true
 
 ###############################################################################
 # PYRIGHT - FOR VS CODE PYLANCE
