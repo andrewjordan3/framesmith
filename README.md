@@ -10,9 +10,9 @@ Composable atomic transforms, declarative recipes, expression-first design.
 
 ## Status
 
-`framesmith` is in alpha. The public surface is small but the shape of the API
-may still change as new transforms and recipes land. It is not yet published
-to PyPI; install from source while the design settles.
+`framesmith` is in alpha. The public surface and API shape may still change as
+new transforms and recipes land. It is not yet published to PyPI; install from
+source while the design settles.
 
 ## Why
 
@@ -43,8 +43,8 @@ raw = pl.DataFrame({
 })
 
 cleaned = raw.with_columns(
-    fs.compose_column('customer_name', fs.NORMALIZE_TEXT),
-    fs.compose_column('amount',        fs.NORMALIZE_NUMERIC),
+    fs.compose_column('customer_name', fs.TEXT_NORMALIZE),
+    fs.compose_column('amount',        fs.NUMERIC_STRING_TO_FLOAT),
 )
 print(cleaned)
 # shape: (3, 2)
@@ -64,11 +64,12 @@ Recipes are plain `tuple[ExpressionTransform, ...]` — splice them to extend:
 ```python
 from framesmith.transforms import to_snake_case
 
-normalize_and_snake = (*fs.NORMALIZE_TEXT, to_snake_case)
+normalize_and_snake = (*fs.TEXT_NORMALIZE, to_snake_case)
 df_snake = raw.with_columns(
     fs.compose_column('customer_name', normalize_and_snake)
 )
 # 'OBrien and Co' becomes 'obrien_and_co', etc.
+# (this exact pipeline also ships ready-made as fs.TEXT_NORMALIZE_TO_SNAKE_CASE)
 ```
 
 ## Installation
@@ -105,25 +106,32 @@ from framesmith.transforms import collapse_whitespace
 df.with_columns(compose_column('description', [collapse_whitespace]))
 ```
 
-The transforms shipped so far live in `framesmith.transforms` — see that
-module for the current set.
+The full set of transforms lives in `framesmith.transforms` — see the
+[reference](docs/reference.md) for every one, grouped by domain.
 
 ### Recipes
 
 A recipe is an ordered tuple of transforms: `tuple[ExpressionTransform, ...]`.
-The most common recipes live in `framesmith.recipes` and are re-exported at
-the top level — `NORMALIZE_TEXT`, `NORMALIZE_NUMERIC`, `NORMALIZE_PERCENT`,
-`CLEAN_NUMERIC_STRING`, `UNICODE_TO_ASCII`.
+All recipes live in `framesmith.recipes` and are re-exported at the top level,
+so `from framesmith import TEXT_NORMALIZE` works directly. They follow a naming
+protocol so the name states what the recipe does:
+
+- `<INPUT>_CANONICALIZE` — meaning-preserving representation cleanup
+  (whitespace, case, Unicode form).
+- `<INPUT>_NORMALIZE` — domain-aware cleanup that interprets the value (an
+  address, a name, a number).
+- `<INPUT>_TO_<FORM>` — a conversion whose output form or dtype differs
+  (`TO_FLOAT`, `TO_SNAKE_CASE`, `TO_TITLE`, …).
 
 Because recipes are plain tuples, they compose by splicing:
 
 ```python
-my_recipe = (*fs.NORMALIZE_TEXT, to_snake_case)
+my_recipe = (*fs.TEXT_NORMALIZE, to_snake_case)
 ```
 
-And a recipe can include another recipe the same way — `NORMALIZE_TEXT`
-itself splices `UNICODE_TO_ASCII`, so the Unicode-canonicalization order
-has exactly one source of truth.
+And a recipe can include another recipe the same way — `TEXT_NORMALIZE` builds
+on `TEXT_CANONICALIZE`, which itself splices `UNICODE_TO_ASCII`, so the
+canonicalization order has exactly one source of truth.
 
 ### `compose_column`
 
@@ -149,14 +157,15 @@ When configuration is genuinely data-dependent — for example, which strings
 count as "missing" varies by source — a transform factory takes the
 configuration and returns a configured `ExpressionTransform`. Validation
 and any precomputation happen once, in the factory body, so the per-call
-work stays cheap. The factories shipped so far are `nullify_sentinels`
-(configurable missing-value tokens) and `replace_whitespace_with`
-(configurable separator).
+work stays cheap. Several transforms are factories — `nullify_sentinels`
+(configurable missing-value tokens), `map_categories` (a label remap),
+`pad_left` (fixed-width padding), and the address standardizers among them;
+the [reference](docs/reference.md) shows which transforms take configuration.
 
 ```python
 from framesmith.transforms import DEFAULT_MISSING_SENTINELS, nullify_sentinels
 
-recipe = (*fs.NORMALIZE_TEXT, nullify_sentinels(DEFAULT_MISSING_SENTINELS))
+recipe = (*fs.TEXT_NORMALIZE, nullify_sentinels(DEFAULT_MISSING_SENTINELS))
 ```
 
 Sentinel handling is opt-in by design and never appears in a default
@@ -177,36 +186,14 @@ monthly = df.filter(within_complete_month('transaction_date'))
 Filters compose with other boolean expressions through the usual
 `&` and `|` — no `framesmith` abstraction is needed for that.
 
-## Current building blocks
+## Reference
 
-A scannable summary of what ships now. This is the current state, not the
-final shape.
-
-**Text** (`framesmith.transforms`): NFKC normalization, ASCII compatibility
-folding (smart quotes, em-dashes, currency symbols, trademark/registered,
-non-standard whitespace), whitespace handling (collapse, strip,
-replace-with), ampersand expansion, apostrophe and period removal,
-snake-case conversion, blank-to-null coercion.
-
-**Numeric** (`framesmith.transforms`): accounting-style parens to negative,
-mainframe trailing-minus, thousands-separator removal, `Float64` casting,
-percent-to-fraction parsing.
-
-**Names** (`framesmith.transforms`): trailing `jr` / `jr.` suffix removal.
-
-**Missing-data sentinels** (`framesmith.transforms`): configurable sentinel
-nullification via a factory, with a conservative default set
-(`DEFAULT_MISSING_SENTINELS`).
-
-**Recipes** (top-level): `NORMALIZE_TEXT`, `NORMALIZE_NUMERIC`,
-`CLEAN_NUMERIC_STRING`, `NORMALIZE_PERCENT`, `UNICODE_TO_ASCII`.
-
-**Filters** (`framesmith.filters`): incomplete-trailing-period exclusion for
-date-based reporting columns (`within_complete_period`,
-`within_complete_month`).
-
-See `src/framesmith/` for the complete current surface. Each public symbol
-carries a full docstring with examples.
+The complete reference — every transform, recipe, filter, and frame-level
+helper, with its signature, a short description, and an example — lives in
+[`docs/reference.md`](docs/reference.md). It is organized by package: recipes
+first, then transforms grouped by domain (whitespace, case, unicode, numeric,
+names, addresses, dates, outliers, categorical, and more), then the filter,
+combine, group, validate, schema, and canonicalize helpers.
 
 ## What's under consideration
 
@@ -227,14 +214,14 @@ Engineering conventions live in [`CLAUDE.md`](CLAUDE.md). The repo uses
 [`uv`](https://docs.astral.sh/uv/) for environment management.
 
 ```bash
-uv run pytest tests/          # full test suite
+uv run pytest                 # full suite, including src doctests
 uv run ruff check src/ tests/
 uv run mypy src/
 ```
 
-The current test suite covers atomic transforms, recipes, factories,
-filters, the composition layer, and regex / pattern primitives, with
-positive and negative cases for the public symbols shipped so far.
+The test suite covers the atomic transforms, recipes, factories, filters, the
+composition layer, and the regex / pattern primitives, with positive and
+negative cases, plus the docstring examples run as doctests.
 
 ## License
 
