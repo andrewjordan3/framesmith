@@ -62,7 +62,11 @@ df_snake = raw.with_columns(
 
 ## Installation
 
-`framesmith` is not yet on PyPI — install from source:
+```bash
+pip install framesmith
+```
+
+Or install from source:
 
 ```bash
 git clone https://github.com/andrewjordan3/framesmith.git
