@@ -75,7 +75,7 @@ def _apply(
 # ---------------------------------------------------------------------
 
 
-class TestTextNormalizeFaithfulnessNfkc:
+class TestTextNormalizeNfkc:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -92,7 +92,7 @@ class TestTextNormalizeFaithfulnessNfkc:
         assert result.to_list() == [expected]
 
 
-class TestTextNormalizeFaithfulnessAsciiFolding:
+class TestTextNormalizeAsciiFolding:
     @pytest.mark.parametrize(
         ('value', 'expected'),
         [
@@ -123,7 +123,7 @@ class TestTextNormalizeFaithfulnessAsciiFolding:
         assert result.to_list() == ['BrandTM']
 
 
-class TestTextNormalizeFaithfulnessWhitespace:
+class TestTextNormalizeWhitespace:
     def test_tabs_become_spaces(self) -> None:
         result = _apply(['a\tb'], TEXT_NORMALIZE)
         assert result.to_list() == ['a b']
@@ -142,7 +142,7 @@ class TestTextNormalizeFaithfulnessWhitespace:
         assert result.to_list() == ['hello']
 
 
-class TestTextNormalizeFaithfulnessAmpersand:
+class TestTextNormalizeAmpersand:
     def test_ampersand_expanded(self) -> None:
         result = _apply(['Sales & Service'], TEXT_NORMALIZE)
         assert result.to_list() == ['Sales and Service']
@@ -152,7 +152,7 @@ class TestTextNormalizeFaithfulnessAmpersand:
         assert result.to_list() == ['SALES and SERVICE']
 
 
-class TestTextNormalizeFaithfulnessApostropheAndPeriod:
+class TestTextNormalizeApostropheAndPeriod:
     def test_apostrophe_removed(self) -> None:
         result = _apply(["O'Brien"], TEXT_NORMALIZE)
         assert result.to_list() == ['OBrien']
@@ -168,7 +168,7 @@ class TestTextNormalizeFaithfulnessApostropheAndPeriod:
         assert result.to_list() == ['OBrien']
 
 
-class TestTextNormalizeFaithfulnessNullSemantics:
+class TestTextNormalizeNullSemantics:
     def test_null_propagates(self) -> None:
         result = _apply([None], TEXT_NORMALIZE)
         assert result.to_list() == [None]
