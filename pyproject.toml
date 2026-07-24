@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 ###############################################################################
 [project]
 name = "framesmith"
-version = "0.1.0"
+version = "0.2.0"
 description = "Composable, expression-first preprocessing for polars DataFrames: small atomic transforms, declarative recipes, and one function that composes them onto a column."
 readme = "README.md"
 authors = [{ name = "Andrew Jordan", email = "andrewjordan3@gmail.com" }]

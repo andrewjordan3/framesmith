@@ -16,6 +16,7 @@ from framesmith.transforms import (
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
+    separators_to_space,
     underscores_to_spaces,
 )
 
@@ -123,6 +124,44 @@ class TestUnderscoresToSpaces:
         assert result.dtype == pl.String
 
 
+class TestSeparatorsToSpace:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john.doe', 'john doe'),
+            ('jane_q_smith', 'jane q smith'),
+            ('a-b-c', 'a b c'),
+            # Mixed and repeated runs collapse to a single space (the '+').
+            ('john..doe', 'john doe'),
+            ('a._-b', 'a b'),
+            ('first.middle_last-jr', 'first middle last jr'),
+            # No separators — unchanged.
+            ('plain', 'plain'),
+            ('', ''),
+        ],
+    )
+    def test_replaces_separator_runs_with_one_space(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], separators_to_space)
+        assert result.to_list() == [expected]
+
+    def test_existing_whitespace_left_untouched(self) -> None:
+        # Only [._-] runs are rewritten; pre-existing whitespace runs are not
+        # collapsed (that is collapse_whitespace's job). This is what keeps the
+        # transform faithful to SQL REGEXP_REPLACE(text, '[._-]+', ' ').
+        result = _apply(['a  b.c'], separators_to_space)
+        assert result.to_list() == ['a  b c']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], separators_to_space)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john.doe'], separators_to_space)
+        assert result.dtype == pl.String
+
+
 class TestApplyReplacements:
     def test_single_replacement(self) -> None:
         transform = apply_replacements({'Nasa': 'NASA'})
@@ -176,6 +215,7 @@ class TestNullPropagationBatch:
             remove_periods,
             periods_to_spaces,
             underscores_to_spaces,
+            separators_to_space,
             apply_replacements({'x': 'y'}),
         ]
         expected = pl.Series('x', [None], dtype=pl.String)

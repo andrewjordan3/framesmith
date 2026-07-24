@@ -29,13 +29,16 @@ whitespace-only values to null.
 """
 
 from framesmith.transforms import (
+    DEFAULT_PLACEHOLDER_SENTINELS,
     accounting_parens_to_negative,
     cast_to_float64,
     collapse_whitespace,
     extract_email_local_part,
+    extract_email_local_part_strict,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
+    nullify_sentinels,
     percent_to_fraction,
     periods_to_spaces,
     remove_apostrophes,
@@ -43,6 +46,7 @@ from framesmith.transforms import (
     remove_periods,
     remove_thousands_separators,
     replace_ampersand_with_and,
+    separators_to_space,
     standardize_directionals,
     standardize_initials,
     standardize_street_suffixes,
@@ -53,6 +57,7 @@ from framesmith.transforms import (
     to_lowercase,
     to_snake_case,
     to_titlecase,
+    to_uppercase,
     trailing_minus_to_prefix,
     underscores_to_spaces,
 )
@@ -62,6 +67,7 @@ __all__: list[str] = [
     'CATEGORY_CANONICALIZE',
     'CATEGORY_CANONICALIZE_TO_SNAKE_CASE',
     'EMAIL_TO_DISPLAY_NAME',
+    'EMAIL_TO_TITLE_NAME',
     'NUMERIC_STRING_NORMALIZE',
     'NUMERIC_STRING_TO_FLOAT',
     'PERCENT_STRING_TO_FRACTION',
@@ -74,6 +80,7 @@ __all__: list[str] = [
     'TEXT_NORMALIZE',
     'TEXT_NORMALIZE_TO_SNAKE_CASE',
     'UNICODE_TO_ASCII',
+    'UPPERCASE_CODE_NORMALIZE',
     'WHITESPACE_CANONICALIZE',
 ]
 
@@ -197,6 +204,29 @@ PERSON_NAME_NORMALIZE_TO_SNAKE_CASE: tuple[ExpressionTransform, ...] = (
 )
 
 
+# --- Identifier codes (domain normalization) ---
+
+# Canonicalize an identifier code (VIN, license plate, asset tag) to the one
+# form a pipeline joins on: NFKC-normalize (fullwidth and other compatibility
+# look-alikes fold to ASCII, so a fullwidth-digit VIN normalizes to plain
+# ASCII), tidy whitespace and drop blanks to null via
+# WHITESPACE_CANONICALIZE, UPPERCASE, then null the '?'
+# placeholder that stands in for an unknown code. On a clean code (no interior
+# whitespace, no Unicode oddity, not the placeholder) the result is exactly
+# UPPER(TRIM(code)) — the collapse and NFKC steps are no-ops there — so the
+# output joins byte-for-byte against a SQL UPPER(TRIM(...)) key while still
+# repairing case, exotic whitespace, and look-alike Unicode on messy input.
+# Blank-to-null runs inside the WHITESPACE_CANONICALIZE splice; ordering it
+# ahead of the uppercase step is equivalent since neither creates or clears a
+# blank the other would have caught.
+UPPERCASE_CODE_NORMALIZE: tuple[ExpressionTransform, ...] = (
+    normalize_unicode_nfkc,
+    *WHITESPACE_CANONICALIZE,
+    to_uppercase,
+    nullify_sentinels(DEFAULT_PLACEHOLDER_SENTINELS),
+)
+
+
 # --- Numeric strings ---
 
 # Clean a messy numeric/currency string into a bare numeric string ready to
@@ -238,6 +268,31 @@ EMAIL_TO_DISPLAY_NAME: tuple[ExpressionTransform, ...] = (
     extract_email_local_part,
     periods_to_spaces,
     collapse_whitespace,
+)
+
+# Derive a Title Case display name from an email, modeled on the BigQuery report
+# expression
+#   INITCAP(REGEXP_REPLACE(REGEXP_EXTRACT(LOWER(email), '^([^@]+)@'),
+#                          '[._-]+', ' '))
+# : strict-extract the local part before the first '@' (null for a value with no
+# '@' or an empty local part — REGEXP_EXTRACT semantics), replace each
+# '.'/'_'/'-' run with a single space (separators_to_space == the '[._-]+' -> ' '
+# regex), then title-case. This differs from EMAIL_TO_DISPLAY_NAME, whose lenient
+# extractor keeps a non-conforming value and whose periods_to_spaces ignores '_'
+# and '-'. The LOWER in the source is redundant here because to_titlecase re-cases
+# every word, so it is omitted. A null or non-conforming email yields null.
+#
+# Title casing is polars `to_titlecase`, which is NOT byte-identical to BigQuery
+# INITCAP on two rare, purely cosmetic edge cases (a single letter's case in a
+# display name): (1) an intra-word capital's tail is lowercased, so 'mcdonald' ->
+# 'Mcdonald' not 'McDonald'; (2) a letter immediately after a digit is
+# capitalized, '2pac' -> '2Pac' where INITCAP (treating digits as word
+# characters, not delimiters) yields '2pac'. Neither occurs for first.last@
+# corporate mailboxes. Do not rely on this recipe for byte-exact INITCAP parity.
+EMAIL_TO_TITLE_NAME: tuple[ExpressionTransform, ...] = (
+    extract_email_local_part_strict,
+    separators_to_space,
+    to_titlecase,
 )
 
 # Turn a snake_case identifier into a Title Case label: underscores to spaces,

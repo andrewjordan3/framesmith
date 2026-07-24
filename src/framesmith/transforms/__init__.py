@@ -27,6 +27,7 @@ from framesmith.transforms.case import (
     to_lowercase,
     to_snake_case,
     to_titlecase,
+    to_uppercase,
 )
 from framesmith.transforms.categorical import (
     collapse_keep_top_n,
@@ -41,6 +42,7 @@ from framesmith.transforms.dates import (
 )
 from framesmith.transforms.missing import (
     DEFAULT_MISSING_SENTINELS,
+    DEFAULT_PLACEHOLDER_SENTINELS,
     nullify_sentinels,
 )
 from framesmith.transforms.names import (
@@ -48,6 +50,7 @@ from framesmith.transforms.names import (
     DEFAULT_NAME_PREFIXES,
     DEFAULT_NAME_SUFFIXES,
     extract_email_local_part,
+    extract_email_local_part_strict,
     remove_credentials,
     remove_jr_suffix,
     standardize_initials,
@@ -77,6 +80,7 @@ from framesmith.transforms.substitution import (
     remove_apostrophes,
     remove_periods,
     replace_ampersand_with_and,
+    separators_to_space,
     underscores_to_spaces,
 )
 from framesmith.transforms.unicode import (
@@ -96,6 +100,7 @@ __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
+    'DEFAULT_PLACEHOLDER_SENTINELS',
     'DEFAULT_SPLIT_DELIMITERS',
     'DEFAULT_STREET_SUFFIX_MAP',
     'DEFAULT_UNIT_MARKER_MAP',
@@ -108,6 +113,7 @@ __all__: list[str] = [
     'collapse_rare_by_count',
     'collapse_whitespace',
     'extract_email_local_part',
+    'extract_email_local_part_strict',
     'extract_zip_code',
     'flag_dates_outside_range',
     'flag_iqr_outliers',
@@ -130,6 +136,7 @@ __all__: list[str] = [
     'remove_thousands_separators',
     'replace_ampersand_with_and',
     'replace_whitespace_with',
+    'separators_to_space',
     'split_on_delimiters',
     'standardize_directionals',
     'standardize_initials',
@@ -144,6 +151,7 @@ __all__: list[str] = [
     'to_lowercase',
     'to_snake_case',
     'to_titlecase',
+    'to_uppercase',
     'trailing_minus_to_prefix',
     'underscores_to_spaces',
     'winsorize_numeric',

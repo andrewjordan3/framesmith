@@ -14,6 +14,7 @@ from framesmith.transforms import (
     to_lowercase,
     to_snake_case,
     to_titlecase,
+    to_uppercase,
 )
 
 
@@ -45,6 +46,28 @@ class TestToLowercase:
     def test_null_propagates(self) -> None:
         result = _apply([None], to_lowercase)
         assert result.to_list() == [None]
+
+
+class TestToUppercase:
+    def test_mixed_case_becomes_upper(self) -> None:
+        result = _apply(['Hello World'], to_uppercase)
+        assert result.to_list() == ['HELLO WORLD']
+
+    def test_already_uppercase_unchanged(self) -> None:
+        result = _apply(['ALREADY UPPER'], to_uppercase)
+        assert result.to_list() == ['ALREADY UPPER']
+
+    def test_digits_and_punctuation_unaffected(self) -> None:
+        result = _apply(['abc-123'], to_uppercase)
+        assert result.to_list() == ['ABC-123']
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], to_uppercase)
+        assert result.to_list() == [None]
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['hello'], to_uppercase)
+        assert result.dtype == pl.String
 
 
 class TestToSnakeCase:
@@ -136,6 +159,7 @@ class TestNullPropagationBatch:
             to_lowercase,
             to_snake_case,
             to_titlecase,
+            to_uppercase,
         ]
         expected = pl.Series('x', [None], dtype=pl.String)
         for transform in transforms:

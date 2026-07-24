@@ -2,9 +2,10 @@
 """Character- and substring-substitution transforms.
 
 Single-character substitutions (``remove_apostrophes``, ``remove_periods``,
-``periods_to_spaces``, ``underscores_to_spaces``, ``replace_ampersand_with_and``)
-and the configurable literal-substring ``apply_replacements`` factory. All
-follow the ``ExpressionTransform`` contract.
+``periods_to_spaces``, ``underscores_to_spaces``, ``replace_ampersand_with_and``),
+the run-collapsing ``separators_to_space``, and the configurable
+literal-substring ``apply_replacements`` factory. All follow the
+``ExpressionTransform`` contract.
 """
 
 import polars as pl
@@ -17,6 +18,7 @@ __all__: list[str] = [
     'remove_apostrophes',
     'remove_periods',
     'replace_ampersand_with_and',
+    'separators_to_space',
     'underscores_to_spaces',
 ]
 
@@ -59,6 +61,24 @@ def underscores_to_spaces(expr: pl.Expr) -> pl.Expr:
     :func:`periods_to_spaces`. Nulls pass through unchanged.
     """
     return expr.str.replace_all('_', ' ', literal=True)
+
+
+def separators_to_space(expr: pl.Expr) -> pl.Expr:
+    """Replace each run of ``.`` ``_`` ``-`` separators with one space.
+
+    Reproduces SQL ``REGEXP_REPLACE(text, '[._-]+', ' ')``: a maximal run
+    of periods, underscores, and/or hyphens — mixed or repeated — collapses
+    to a single space. ``'jane..doe'`` and ``'a._-b'`` both yield one space
+    per run (``'jane doe'``, ``'a b'``).
+
+    Distinct from :func:`periods_to_spaces` and :func:`underscores_to_spaces`,
+    which are single-character and non-collapsing; this transform handles all
+    three separators at once and collapses runs, which is what the ``+`` in
+    the SQL pattern does. Whitespace already present is left untouched (only
+    ``[._-]`` runs are rewritten), so it does not double as
+    :func:`collapse_whitespace`. Nulls pass through unchanged.
+    """
+    return expr.str.replace_all(r'[._-]+', ' ')
 
 
 def apply_replacements(replacements: dict[str, str]) -> ExpressionTransform:

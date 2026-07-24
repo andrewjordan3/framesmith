@@ -24,6 +24,7 @@ from framesmith.types import ExpressionTransform
 
 __all__: list[str] = [
     'DEFAULT_MISSING_SENTINELS',
+    'DEFAULT_PLACEHOLDER_SENTINELS',
     'nullify_sentinels',
 ]
 
@@ -50,6 +51,16 @@ DEFAULT_MISSING_SENTINELS: frozenset[str] = frozenset(
         'NONE',
     }
 )
+
+
+# Placeholder tokens that stand in for an unknown identifier or code in
+# source exports. Unlike ``DEFAULT_MISSING_SENTINELS`` — whose word-forms
+# ('NA', 'NONE') can be valid data — ``'?'`` is never a valid VIN, plate,
+# or asset code, so nulling it is safe on an identifier column even though
+# it would be noise in free text. This is the set the identifier recipe
+# (``UPPERCASE_CODE_NORMALIZE``) nulls; a source with other placeholders
+# ('???', 'UNKNOWN') passes its own set to :func:`nullify_sentinels`.
+DEFAULT_PLACEHOLDER_SENTINELS: frozenset[str] = frozenset({'?'})
 
 
 def nullify_sentinels(
