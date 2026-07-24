@@ -20,6 +20,7 @@ __all__: list[str] = [
     'DEFAULT_NAME_PREFIXES',
     'DEFAULT_NAME_SUFFIXES',
     'extract_email_local_part',
+    'extract_email_local_part_strict',
     'remove_credentials',
     'remove_jr_suffix',
     'standardize_initials',
@@ -62,6 +63,24 @@ def extract_email_local_part(expr: pl.Expr) -> pl.Expr:
     Nulls pass through as null.
     """
     return expr.str.split('@').list.first()
+
+
+def extract_email_local_part_strict(expr: pl.Expr) -> pl.Expr:
+    """Take the local part of a well-formed address; else null.
+
+    Strict counterpart to :func:`extract_email_local_part`. Captures the
+    run before the first ``'@'`` via ``^([^@]+)@`` — reproducing SQL
+    ``REGEXP_EXTRACT(email, '^([^@]+)@')`` — so a value with no ``'@'``,
+    or a leading ``'@'`` (empty local part), yields null instead of the
+    lenient extractor's pass-through or empty string. Use this when a
+    non-conforming address must become null; use the lenient
+    :func:`extract_email_local_part` when a bare token should survive.
+
+    Atomic: does NOT strip surrounding whitespace, lowercase, or further
+    normalize — a leading space is part of ``[^@]+`` and is captured
+    verbatim. Nulls pass through as null.
+    """
+    return expr.str.extract(r'^([^@]+)@', 1)
 
 
 def _name_token_alternation(tokens: Sequence[str]) -> str:

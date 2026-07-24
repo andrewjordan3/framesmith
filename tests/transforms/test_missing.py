@@ -6,7 +6,11 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from framesmith import TEXT_NORMALIZE, ExpressionTransform, compose_column
-from framesmith.transforms import DEFAULT_MISSING_SENTINELS, nullify_sentinels
+from framesmith.transforms import (
+    DEFAULT_MISSING_SENTINELS,
+    DEFAULT_PLACEHOLDER_SENTINELS,
+    nullify_sentinels,
+)
 
 
 def _apply(
@@ -81,6 +85,31 @@ class TestDefaultSentinels:
     def test_null_propagates(self, transform: ExpressionTransform) -> None:
         result = _apply([None], transform)
         assert result.to_list() == [None]
+
+
+# ---------------------------------------------------------------------
+# DEFAULT_PLACEHOLDER_SENTINELS behavior
+# ---------------------------------------------------------------------
+
+
+class TestDefaultPlaceholderSentinels:
+    def test_contains_the_question_mark_placeholder(self) -> None:
+        assert frozenset({'?'}) == DEFAULT_PLACEHOLDER_SENTINELS
+
+    def test_nulls_question_mark(self) -> None:
+        transform = nullify_sentinels(DEFAULT_PLACEHOLDER_SENTINELS)
+        assert _apply(['?'], transform).to_list() == [None]
+
+    def test_whitespace_padded_placeholder_nulled(self) -> None:
+        # The factory strips before comparison, so a padded '?' still matches.
+        transform = nullify_sentinels(DEFAULT_PLACEHOLDER_SENTINELS)
+        assert _apply([' ? '], transform).to_list() == [None]
+
+    def test_real_code_unchanged(self) -> None:
+        transform = nullify_sentinels(DEFAULT_PLACEHOLDER_SENTINELS)
+        assert _apply(['1HGCM82633A004352'], transform).to_list() == [
+            '1HGCM82633A004352'
+        ]
 
 
 # ---------------------------------------------------------------------

@@ -15,11 +15,13 @@ from polars.testing import assert_frame_equal
 
 from framesmith import (
     EMAIL_TO_DISPLAY_NAME,
+    EMAIL_TO_TITLE_NAME,
     NUMERIC_STRING_NORMALIZE,
     NUMERIC_STRING_TO_FLOAT,
     PERCENT_STRING_TO_FRACTION,
     TEXT_NORMALIZE,
     UNICODE_TO_ASCII,
+    UPPERCASE_CODE_NORMALIZE,
     ExpressionTransform,
     compose_column,
     recipes,
@@ -37,11 +39,13 @@ from framesmith.recipes import (
     WHITESPACE_CANONICALIZE,
 )
 from framesmith.transforms import (
+    DEFAULT_PLACEHOLDER_SENTINELS,
     accounting_parens_to_negative,
     apply_replacements,
     cast_to_float64,
     collapse_whitespace,
     extract_email_local_part,
+    extract_email_local_part_strict,
     fold_to_ascii,
     normalize_unicode_nfkc,
     nullify_blank_strings,
@@ -52,11 +56,13 @@ from framesmith.transforms import (
     remove_periods,
     remove_thousands_separators,
     replace_ampersand_with_and,
+    separators_to_space,
     standardize_initials,
     strip_whitespace,
     to_lowercase,
     to_snake_case,
     to_titlecase,
+    to_uppercase,
     trailing_minus_to_prefix,
     underscores_to_spaces,
 )
@@ -558,27 +564,35 @@ class TestNoSentinelNullificationInDefaultRecipes:
     """Regression guard for the opt-in property of ``nullify_sentinels``.
 
     Sentinel handling depends on the data source — defaulting it on would
-    silently null valid values (e.g. ``'NA'`` as Namibia). These tests pin
-    the exact transforms in each shipped recipe so a future edit that slips
-    ``nullify_sentinels`` (or any unexpected transform) into a default
-    recipe fires immediately. The recipes use ``nullify_blank_strings``,
-    which is a different transform.
+    silently null valid values (e.g. ``'NA'`` as Namibia). The general-purpose
+    text/category/numeric/name/address recipes therefore stay sentinel-free,
+    pinned by the exact-tuple and structural tests below so a future edit that
+    slips sentinel nullification (or any unexpected transform) into one fires
+    immediately; those recipes use ``nullify_blank_strings``, a different
+    transform. ``UPPERCASE_CODE_NORMALIZE`` is the deliberate exception: on an
+    identifier column ``'?'`` is never valid data, so it nulls that placeholder
+    via a *called* ``nullify_sentinels`` closure — locked positively by
+    ``TestUppercaseCodeNormalize`` rather than pinned here.
     """
 
-    def test_no_recipe_contains_nullify_sentinels(self) -> None:
-        # Sweep all 16 published recipes, including the factory-closure
-        # ones that the exact-tuple pins below cannot reconstruct.
+    def test_no_recipe_contains_the_uncalled_factory(self) -> None:
+        # Tripwire for the specific mistake of splicing the *uncalled*
+        # nullify_sentinels factory into a recipe (a bug — the factory must be
+        # called to yield a transform). It holds for every published recipe,
+        # including UPPERCASE_CODE_NORMALIZE, whose intentional sentinel step is
+        # the called closure — a different object than the factory checked here.
         for name in recipes.__all__:
             recipe = getattr(recipes, name)
             assert nullify_sentinels not in recipe, name
 
     def test_published_recipe_names_pinned(self) -> None:
-        # The 16 recipes the module publishes, locked so a rename or
-        # accidental drop fires here.
+        # The recipes the module publishes, locked so a rename or accidental
+        # drop fires here.
         assert recipes.__all__ == [
             'CATEGORY_CANONICALIZE',
             'CATEGORY_CANONICALIZE_TO_SNAKE_CASE',
             'EMAIL_TO_DISPLAY_NAME',
+            'EMAIL_TO_TITLE_NAME',
             'NUMERIC_STRING_NORMALIZE',
             'NUMERIC_STRING_TO_FLOAT',
             'PERCENT_STRING_TO_FRACTION',
@@ -591,6 +605,7 @@ class TestNoSentinelNullificationInDefaultRecipes:
             'TEXT_NORMALIZE',
             'TEXT_NORMALIZE_TO_SNAKE_CASE',
             'UNICODE_TO_ASCII',
+            'UPPERCASE_CODE_NORMALIZE',
             'WHITESPACE_CANONICALIZE',
         ]
 
@@ -697,6 +712,13 @@ class TestNoSentinelNullificationInDefaultRecipes:
     def test_snake_case_to_title_contents_pinned(self) -> None:
         assert (underscores_to_spaces, to_titlecase) == SNAKE_CASE_TO_TITLE
 
+    def test_email_to_title_name_contents_pinned(self) -> None:
+        assert (
+            extract_email_local_part_strict,
+            separators_to_space,
+            to_titlecase,
+        ) == EMAIL_TO_TITLE_NAME
+
     # --- Structural pins for the factory-closure recipes ---
     # standardize_*() and remove_credentials()/strip_name_*() return fresh
     # closures that no independent construction can equal, so these pin the
@@ -716,6 +738,15 @@ class TestNoSentinelNullificationInDefaultRecipes:
         assert all(callable(step) for step in PERSON_NAME_NORMALIZE[3:6])
         assert PERSON_NAME_NORMALIZE[6] is standardize_initials
         assert PERSON_NAME_NORMALIZE[7] is strip_whitespace
+
+    def test_uppercase_code_normalize_structure_pinned(self) -> None:
+        # NFKC, then the WHITESPACE_CANONICALIZE splice, then uppercase, then a
+        # nullify_sentinels closure that no independent construction can equal.
+        assert len(UPPERCASE_CODE_NORMALIZE) == 6
+        assert UPPERCASE_CODE_NORMALIZE[0] is normalize_unicode_nfkc
+        assert UPPERCASE_CODE_NORMALIZE[1:4] == WHITESPACE_CANONICALIZE
+        assert UPPERCASE_CODE_NORMALIZE[4] is to_uppercase
+        assert callable(UPPERCASE_CODE_NORMALIZE[5])
 
 
 # ---------------------------------------------------------------------
@@ -920,3 +951,179 @@ class TestSnakeCaseToTitle:
         recipe = (*SNAKE_CASE_TO_TITLE, apply_replacements({'Nasa': 'NASA'}))
         result = _apply(['nasa_program', 'visit_nasa'], recipe)
         assert result.to_list() == ['NASA Program', 'Visit NASA']
+
+
+# ---------------------------------------------------------------------
+# UPPERCASE_CODE_NORMALIZE end-to-end
+# ---------------------------------------------------------------------
+
+
+class TestUppercaseCodeNormalize:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            # Lowercase VIN uppercased.
+            ('1hgcm82633a004352', '1HGCM82633A004352'),
+            # Surrounding whitespace stripped.
+            ('  JH4KA2650MC000000  ', 'JH4KA2650MC000000'),
+            # Interior whitespace run collapsed to a single space, then upper.
+            ('ab  cd', 'AB CD'),
+            # Fullwidth Unicode look-alikes fold to ASCII via NFKC.
+            ('ＡＢＣ１２３', 'ABC123'),  # noqa: RUF001
+            # Fullwidth AND lowercase: NFKC folds, then uppercase.
+            ('ａｂｃ１２３', 'ABC123'),  # noqa: RUF001
+        ],
+    )
+    def test_canonicalizes_identifier_code(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], UPPERCASE_CODE_NORMALIZE)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        ['', '   ', '\t', '?', ' ? ', None],
+    )
+    def test_blank_and_placeholder_become_null(
+        self, value: str | None
+    ) -> None:
+        # Blank/whitespace-only via nullify_blank_strings; the '?' placeholder
+        # (even whitespace-padded) via the nullify_sentinels step.
+        result = _apply([value], UPPERCASE_CODE_NORMALIZE)
+        assert result.to_list() == [None]
+
+    def test_agrees_with_sql_upper_trim_on_clean_input(self) -> None:
+        # The core join guarantee: on a clean code (no interior whitespace, no
+        # Unicode oddity, not the '?' placeholder) the recipe output is exactly
+        # UPPER(TRIM(code)), so it joins byte-for-byte against a SQL key.
+        clean = [
+            '1hgcm82633a004352',
+            '  JH4KA2650MC000000  ',
+            'wba3a5c50cf256949',
+            'ABCdef123',
+        ]
+        df = pl.DataFrame({'x': clean}, schema={'x': pl.String})
+        sql_upper_trim = df.select(
+            pl.col('x').str.strip_chars().str.to_uppercase().alias('x')
+        )
+        recipe_out = df.with_columns(
+            compose_column('x', UPPERCASE_CODE_NORMALIZE)
+        )
+        assert_frame_equal(recipe_out, sql_upper_trim)
+
+    def test_nulls_the_default_placeholder_sentinel(self) -> None:
+        # Positive lock for the deliberate sentinel exception: the recipe nulls
+        # the '?' placeholder, and DEFAULT_PLACEHOLDER_SENTINELS is that token.
+        assert frozenset({'?'}) == DEFAULT_PLACEHOLDER_SENTINELS
+        assert _apply(['?'], UPPERCASE_CODE_NORMALIZE).to_list() == [None]
+
+    def test_is_tuple_not_list(self) -> None:
+        assert isinstance(UPPERCASE_CODE_NORMALIZE, tuple)
+        assert not isinstance(UPPERCASE_CODE_NORMALIZE, list)
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['1hgcm82633a004352'], UPPERCASE_CODE_NORMALIZE)
+        assert result.dtype == pl.String
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    '1hgcm82633a004352',
+                    '  JH4KA2650MC000000  ',
+                    'ab  cd',
+                    'ＡＢＣ１２３',  # noqa: RUF001
+                    '?',
+                    '   ',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', UPPERCASE_CODE_NORMALIZE)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# EMAIL_TO_TITLE_NAME end-to-end
+# ---------------------------------------------------------------------
+
+
+class TestEmailToTitleName:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john.doe@example.com', 'John Doe'),
+            # Underscores and hyphens are separators too (unlike
+            # EMAIL_TO_DISPLAY_NAME, which handles only periods).
+            ('jane_q_smith@example.com', 'Jane Q Smith'),
+            ('a-b-c@example.com', 'A B C'),
+            ('first.middle_last-jr@example.com', 'First Middle Last Jr'),
+            # A mixed run of separators collapses to one space.
+            ('a._-b@example.com', 'A B'),
+            # Single-token local part.
+            ('john@example.com', 'John'),
+            # Known INITCAP limitation preserved to match the report.
+            ('mcdonald@example.com', 'Mcdonald'),
+            # Documented cosmetic divergence from BigQuery INITCAP: polars
+            # to_titlecase capitalizes a letter after a digit (INITCAP would
+            # leave '2pac' / '1st'). We pin the polars behavior.
+            ('2pac@example.com', '2Pac'),
+            ('1st.class@example.com', '1St Class'),
+            # Uppercase input still title-cases (the source LOWER is redundant).
+            ('JOHN.DOE@X.COM', 'John Doe'),
+            # Only the part before the first '@' is used.
+            ('john.doe@host@sub.com', 'John Doe'),
+        ],
+    )
+    def test_produces_title_name(self, value: str, expected: str) -> None:
+        result = _apply([value], EMAIL_TO_TITLE_NAME)
+        assert result.to_list() == [expected]
+
+    @pytest.mark.parametrize(
+        'value',
+        [
+            'noatsign',  # no '@' at all
+            '@example.com',  # empty local part
+            '',
+            None,
+        ],
+    )
+    def test_null_or_non_conforming_yields_null(
+        self, value: str | None
+    ) -> None:
+        # REGEXP_EXTRACT('^([^@]+)@') semantics: anything without a non-empty
+        # local part before an '@' is null, matching the BigQuery report.
+        result = _apply([value], EMAIL_TO_TITLE_NAME)
+        assert result.to_list() == [None]
+
+    def test_is_tuple_not_list(self) -> None:
+        assert isinstance(EMAIL_TO_TITLE_NAME, tuple)
+        assert not isinstance(EMAIL_TO_TITLE_NAME, list)
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(['john.doe@example.com'], EMAIL_TO_TITLE_NAME)
+        assert result.dtype == pl.String
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame(
+            {
+                'x': [
+                    'john.doe@example.com',
+                    'jane_q_smith@example.com',
+                    'a-b-c@example.com',
+                    'mcdonald@example.com',
+                    'noatsign',
+                    '@example.com',
+                    '',
+                    None,
+                ]
+            },
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', EMAIL_TO_TITLE_NAME)
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)

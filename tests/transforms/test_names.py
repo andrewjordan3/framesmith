@@ -8,6 +8,7 @@ from polars.testing import assert_frame_equal
 from framesmith import ExpressionTransform, compose_column
 from framesmith.transforms import (
     extract_email_local_part,
+    extract_email_local_part_strict,
     remove_credentials,
     remove_jr_suffix,
     standardize_initials,
@@ -110,6 +111,70 @@ class TestExtractEmailLocalPart:
     def test_output_dtype_is_string(self) -> None:
         result = _apply(['john@example.com'], extract_email_local_part)
         assert result.dtype == pl.String
+
+
+class TestExtractEmailLocalPartStrict:
+    @pytest.mark.parametrize(
+        ('value', 'expected'),
+        [
+            ('john@example.com', 'john'),
+            # Separators preserved at this stage — that's separators_to_space's
+            # job downstream.
+            ('john.doe@example.com', 'john.doe'),
+            ('jane_q_smith@example.com', 'jane_q_smith'),
+            # Only the part before the FIRST '@' is captured.
+            ('john@host@sub', 'john'),
+        ],
+    )
+    def test_takes_part_before_first_at(
+        self, value: str, expected: str
+    ) -> None:
+        result = _apply([value], extract_email_local_part_strict)
+        assert result.to_list() == [expected]
+
+    def test_no_at_sign_yields_null(self) -> None:
+        # Strict divergence from the lenient extractor, which passes 'noatsign'
+        # through unchanged. Here a missing '@' means null.
+        result = _apply(['noatsign'], extract_email_local_part_strict)
+        assert result.to_list() == [None]
+
+    def test_leading_at_empty_local_part_yields_null(self) -> None:
+        # The lenient extractor yields '' here; the strict pattern requires a
+        # non-empty run before '@', so this is null.
+        result = _apply(['@example.com'], extract_email_local_part_strict)
+        assert result.to_list() == [None]
+
+    def test_empty_string_yields_null(self) -> None:
+        result = _apply([''], extract_email_local_part_strict)
+        assert result.to_list() == [None]
+
+    def test_null_propagates(self) -> None:
+        result = _apply([None], extract_email_local_part_strict)
+        assert result.to_list() == [None]
+
+    def test_does_not_strip_surrounding_whitespace(self) -> None:
+        # Atomic-contract proof: a leading space is part of the '[^@]+' run and
+        # is captured verbatim. Compose strip_whitespace upstream if needed.
+        result = _apply(
+            [' padded@example.com'], extract_email_local_part_strict
+        )
+        assert result.to_list() == [' padded']
+
+    def test_output_dtype_is_string(self) -> None:
+        result = _apply(
+            ['john@example.com'], extract_email_local_part_strict
+        )
+        assert result.dtype == pl.String
+
+    def test_lazy_and_eager_produce_identical_results(self) -> None:
+        df = pl.DataFrame(
+            {'x': ['john.doe@x.com', 'noatsign', '@x.com', '', None]},
+            schema={'x': pl.String},
+        )
+        expr = compose_column('x', [extract_email_local_part_strict])
+        eager = df.with_columns(expr)
+        lazy = df.lazy().with_columns(expr).collect()
+        assert_frame_equal(eager, lazy)
 
 
 class TestStripNameSuffixes:

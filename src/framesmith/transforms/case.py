@@ -16,6 +16,7 @@ __all__: list[str] = [
     'to_lowercase',
     'to_snake_case',
     'to_titlecase',
+    'to_uppercase',
 ]
 
 
@@ -31,6 +32,18 @@ def to_lowercase(expr: pl.Expr) -> pl.Expr:
     Nulls pass through unchanged.
     """
     return expr.str.to_lowercase()
+
+
+def to_uppercase(expr: pl.Expr) -> pl.Expr:
+    """Uppercase all characters.
+
+    Atomic: casing only. The mirror of :func:`to_lowercase`. Does not
+    strip, collapse, or Unicode-fold. On plain-ASCII input this agrees
+    with SQL ``UPPER(...)``, so it is the case step for canonicalizing
+    identifier codes (VINs, plates, asset tags) to a single join form.
+    Nulls pass through unchanged.
+    """
+    return expr.str.to_uppercase()
 
 
 def to_titlecase(expr: pl.Expr) -> pl.Expr:
