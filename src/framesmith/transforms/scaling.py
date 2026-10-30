@@ -8,6 +8,14 @@ data-dependent pattern as the outlier and winsorize transforms, so they
 stay pure ``pl.Expr`` transforms that compose in recipes and run lazily
 or eagerly. ``log1p_numeric`` reshapes a skewed non-negative column.
 
+All arithmetic is done in ``Float64``: every transform casts its input
+first, so integer columns cannot overflow at their dtype's limits,
+``Decimal`` and ``Float32`` inputs work, and the output is always
+``Float64``. Non-finite values are never rewritten to plausible-looking
+numbers: a nan or infinite value propagates through the statistics and
+the result as nan, the same behaviour as the underlying polars
+arithmetic. Only nulls are treated as missing.
+
 Scaling is never part of a default recipe: which columns to scale, and
 to what form, is a modelling decision for the caller. Statistics are
 recomputed on whatever frame the expression runs against, so scaling a
@@ -34,10 +42,12 @@ def zscore_numeric(expr: pl.Expr) -> pl.Expr:
     the sample standard deviation (``ddof=1``), matching
     ``flag_zscore_outliers``. Output is ``Float64``.
 
-    A constant column (std 0, at least two values) maps to 0.0: a
-    column with no variation sits exactly at its own mean. A single
-    non-null value has no sample standard deviation, so it maps to
-    null. Nulls pass through as null.
+    A constant column (std 0, at least two values) maps its non-null
+    values to 0.0: a column with no variation sits exactly at its own
+    mean. A single non-null value has no sample standard deviation, so
+    it maps to null. Nulls pass through as null. A nan or infinite
+    value poisons the column statistics, so the whole result is nan;
+    it is never silently rewritten to 0.0.
 
     Example:
         >>> import polars as pl
@@ -49,12 +59,18 @@ def zscore_numeric(expr: pl.Expr) -> pl.Expr:
         ... )['x'].to_list()
         [-1.0, 0.0, 1.0]
     """
-    standard_score: pl.Expr = (expr - expr.mean()) / expr.std()
-    # std == 0 (constant column) divides 0 by 0, which is nan, and a
-    # nan would silently poison a model matrix; map it to 0.0 as in
-    # the outlier-flag guard. is_nan() is null for null inputs, so
-    # null values keep a null result rather than becoming 0.0.
-    return pl.when(standard_score.is_nan()).then(pl.lit(0.0)).otherwise(standard_score)
+    values: pl.Expr = expr.cast(pl.Float64)
+    standard_deviation: pl.Expr = values.std()
+    standard_score: pl.Expr = (values - values.mean()) / standard_deviation
+    # The 0.0 mapping is keyed to the statistic (std == 0, a constant
+    # column), never to the score being nan: a nan score from poisoned
+    # statistics must propagate as nan, not be rewritten to 0.0. The
+    # is-not-null term keeps null rows null in a constant column.
+    return (
+        pl.when((standard_deviation == 0) & values.is_not_null())
+        .then(pl.lit(0.0))
+        .otherwise(standard_score)
+    )
 
 
 def minmax_numeric(expr: pl.Expr) -> pl.Expr:
@@ -65,7 +81,11 @@ def minmax_numeric(expr: pl.Expr) -> pl.Expr:
     largest 1.0. Output is ``Float64``.
 
     A constant column (min == max, including a single non-null value)
-    maps to 0.0, the low end of the range. Nulls pass through as null.
+    maps its non-null values to 0.0, the low end of the range. Nulls
+    pass through as null. A nan value stays nan (polars min/max skip
+    nan, so the finite values still scale). An infinite value makes
+    the range infinite: finite values map to 0.0 and the infinite
+    value itself maps to nan.
 
     Example:
         >>> import polars as pl
@@ -77,11 +97,17 @@ def minmax_numeric(expr: pl.Expr) -> pl.Expr:
         ... )['x'].to_list()
         [0.0, 0.5, 1.0]
     """
-    scaled: pl.Expr = (expr - expr.min()) / (expr.max() - expr.min())
-    # A constant column divides 0 by 0; see zscore_numeric for why the
-    # nan result is mapped to the range's low end instead of passing
-    # through.
-    return pl.when(scaled.is_nan()).then(pl.lit(0.0)).otherwise(scaled)
+    values: pl.Expr = expr.cast(pl.Float64)
+    value_range: pl.Expr = values.max() - values.min()
+    scaled: pl.Expr = (values - values.min()) / value_range
+    # As in zscore_numeric, the 0.0 mapping is keyed to the statistic
+    # (a zero range), not to the scaled value being nan, so a nan
+    # input stays nan instead of masquerading as the column minimum.
+    return (
+        pl.when((value_range == 0) & values.is_not_null())
+        .then(pl.lit(0.0))
+        .otherwise(scaled)
+    )
 
 
 def log1p_numeric(expr: pl.Expr) -> pl.Expr:
@@ -94,7 +120,8 @@ def log1p_numeric(expr: pl.Expr) -> pl.Expr:
     The domain is non-negative values. A negative value becomes null
     rather than a nan or a negative logarithm, so bad data shows up as
     missingness a caller can count instead of silently propagating.
-    Nulls pass through as null.
+    Nulls pass through as null; a nan stays nan and infinity stays
+    infinite.
 
     Example:
         >>> import polars as pl
@@ -107,8 +134,9 @@ def log1p_numeric(expr: pl.Expr) -> pl.Expr:
         >>> result[0], round(result[1], 6), result[2], result[3]
         (0.0, 1.386294, None, None)
     """
+    values: pl.Expr = expr.cast(pl.Float64)
     return (
-        pl.when(expr < 0)
+        pl.when(values < 0)
         .then(pl.lit(None, dtype=pl.Float64))
-        .otherwise((expr + 1).log())
+        .otherwise((values + 1).log())
     )

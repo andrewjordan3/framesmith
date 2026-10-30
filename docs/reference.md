@@ -798,12 +798,16 @@ df.with_columns(compose_column('x', [winsorize_numeric()]))
 
 Scaling statistics are computed over the whole column at execution, so these
 transforms fit on whatever frame they run against; there is no fitted state.
+All arithmetic is in `Float64` (inputs are cast first), and non-finite values
+are never rewritten to plausible-looking numbers: a nan or infinite value
+propagates as nan, as described per transform below.
 
 #### `zscore_numeric`
 
 Standardizes to mean 0 and sample standard deviation 1: `(x - mean) / std`.
 Output is `Float64`. A constant column maps to 0.0; a single non-null value
-maps to null (no sample standard deviation exists); nulls stay null.
+maps to null (no sample standard deviation exists); nulls stay null. A nan or
+infinite value poisons the statistics, so the whole result is nan.
 
 ```python
 df.with_columns(compose_column('x', [zscore_numeric]))
@@ -814,6 +818,8 @@ df.with_columns(compose_column('x', [zscore_numeric]))
 
 Scales linearly into [0, 1]: `(x - min) / (max - min)`. Output is `Float64`.
 A constant column (including a single value) maps to 0.0; nulls stay null.
+A nan value stays nan while the finite values still scale; an infinite value
+maps to nan and the finite values to 0.0.
 
 ```python
 df.with_columns(compose_column('x', [minmax_numeric]))
@@ -824,7 +830,8 @@ df.with_columns(compose_column('x', [minmax_numeric]))
 
 Applies `log(1 + x)`, the reshaping for right-skewed counts and amounts.
 Output is `Float64`. The domain is non-negative: a negative value becomes
-null instead of a nan; nulls stay null.
+null instead of a nan; nulls stay null; nan stays nan and infinity stays
+infinite.
 
 ```python
 df.with_columns(compose_column('x', [log1p_numeric]))

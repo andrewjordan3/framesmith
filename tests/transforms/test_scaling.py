@@ -140,3 +140,100 @@ class TestLog1pNumeric:
         result = _apply([0, 3], log1p_numeric, pl.Int64)
         assert result.dtype == pl.Float64
         _assert_close(result, [0.0, math.log(4.0)])
+
+
+class TestNonFiniteValues:
+    """Regression tests from the logic audit: a nan or infinite value
+    must propagate honestly, never be rewritten to a plausible 0.0."""
+
+    def test_zscore_nan_poisons_statistics_not_zeroed(self) -> None:
+        result = _apply(
+            [1.0, float('nan'), 3.0], zscore_numeric, pl.Float64
+        )
+        assert all(math.isnan(value) for value in result.to_list())
+
+    def test_zscore_inf_poisons_statistics_not_zeroed(self) -> None:
+        result = _apply(
+            [1.0, float('inf'), 3.0], zscore_numeric, pl.Float64
+        )
+        assert all(math.isnan(value) for value in result.to_list())
+
+    def test_minmax_nan_stays_nan_finite_values_still_scale(
+        self,
+    ) -> None:
+        result = _apply(
+            [1.0, 2.0, float('nan')], minmax_numeric, pl.Float64
+        ).to_list()
+        assert result[0] == 0.0
+        assert result[1] == 1.0
+        assert math.isnan(result[2])
+
+    def test_minmax_single_nan_stays_nan(self) -> None:
+        result = _apply([float('nan')], minmax_numeric, pl.Float64)
+        assert math.isnan(result.to_list()[0])
+
+    def test_minmax_inf_row_is_nan_finite_rows_zero(self) -> None:
+        result = _apply(
+            [1.0, 2.0, float('inf')], minmax_numeric, pl.Float64
+        ).to_list()
+        assert result[0] == 0.0
+        assert result[1] == 0.0
+        assert math.isnan(result[2])
+
+    def test_log1p_nan_and_inf_propagate(self) -> None:
+        result = _apply(
+            [float('nan'), float('inf')], log1p_numeric, pl.Float64
+        ).to_list()
+        assert math.isnan(result[0])
+        assert result[1] == float('inf')
+
+
+class TestDtypeEdges:
+    """Regression tests from the logic audit: arithmetic happens in
+    Float64, so no integer dtype can wrap and Decimal works."""
+
+    def test_log1p_at_uint8_max(self) -> None:
+        result = _apply([255], log1p_numeric, pl.UInt8)
+        _assert_close(result, [math.log(256.0)])
+
+    def test_log1p_at_int64_max(self) -> None:
+        result = _apply([2**63 - 1], log1p_numeric, pl.Int64)
+        _assert_close(result, [math.log(2.0**63)])
+
+    def test_minmax_full_int8_range(self) -> None:
+        result = _apply([-128, 0, 127], minmax_numeric, pl.Int8)
+        _assert_close(result, [0.0, 128.0 / 255.0, 1.0])
+
+    def test_minmax_full_int64_range(self) -> None:
+        result = _apply(
+            [-(2**63), 0, 2**63 - 1], minmax_numeric, pl.Int64
+        )
+        _assert_close(result, [0.0, 0.5, 1.0])
+
+    def test_minmax_decimal_column(self) -> None:
+        df = pl.DataFrame(
+            {'x': [1.0, 2.0, 3.0]},
+            schema={'x': pl.Decimal(10, 1)},
+        )
+        result = df.with_columns(
+            compose_column('x', [minmax_numeric])
+        )['x']
+        assert result.dtype == pl.Float64
+        assert result.to_list() == [0.0, 0.5, 1.0]
+
+    def test_float32_input_returns_float64(self) -> None:
+        for transform in (zscore_numeric, minmax_numeric):
+            result = _apply([1.0, 2.0, 3.0], transform, pl.Float32)
+            assert result.dtype == pl.Float64
+
+    def test_zscore_constant_column_with_null_keeps_null(self) -> None:
+        result = _apply(
+            [7.0, 7.0, None], zscore_numeric, pl.Float64
+        )
+        assert result.to_list() == [0.0, 0.0, None]
+
+    def test_minmax_constant_column_with_null_keeps_null(self) -> None:
+        result = _apply(
+            [4.0, 4.0, None], minmax_numeric, pl.Float64
+        )
+        assert result.to_list() == [0.0, 0.0, None]
