@@ -47,9 +47,9 @@ df = df.with_columns(combine_columns(['first', 'last'], 'full_name'))
 ```
 
 Import paths mirror this document: the top level (`from framesmith import ...`)
-exposes `compose_column`, `ExpressionTransform`, and the 16 recipes; the 56
-transforms live on `framesmith.transforms`; each specialized family lives on its
-own subpackage.
+exposes `compose_column`, `compose_columns`, `ExpressionTransform`, and the
+18 recipes; the 54 transforms live on `framesmith.transforms`; each
+specialized family lives on its own subpackage.
 
 ---
 
@@ -332,7 +332,7 @@ df.with_columns(compose_column('field', SNAKE_CASE_TO_TITLE))
 
 ## Transforms
 
-The 56 atomic transforms on `framesmith.transforms`. A **plain** transform is
+The 54 atomic transforms on `framesmith.transforms`. A **plain** transform is
 passed directly in the transform list. A **factory** transform is called first
 to configure it, then the result goes in the list. Unless noted, every transform
 leaves nulls as null.
