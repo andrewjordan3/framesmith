@@ -703,6 +703,7 @@ class TestNoSentinelNullificationInDefaultRecipes:
 
     def test_email_to_display_name_contents_pinned(self) -> None:
         assert (
+            nullify_blank_strings,
             strip_whitespace,
             extract_email_local_part,
             periods_to_spaces,
@@ -858,10 +859,15 @@ class TestEmailToDisplayName:
             # periods become spaces, then collapse keeps a clean form.
             ('noatsign', 'noatsign'),
             ('@example.com', ''),
-            ('', ''),
+            # Blank and whitespace-only values coerce to null, per the
+            # module guarantee for whitespace-touching recipes.
+            ('', None),
+            ('   ', None),
         ],
     )
-    def test_produces_display_name(self, value: str, expected: str) -> None:
+    def test_produces_display_name(
+        self, value: str, expected: str | None
+    ) -> None:
         result = _apply([value], EMAIL_TO_DISPLAY_NAME)
         assert result.to_list() == [expected]
 
@@ -887,6 +893,7 @@ class TestEmailToDisplayNameStructure:
     def test_email_to_display_name_exact_identity(self) -> None:
         # Locks in the recipe shape: any reorder or insertion fires.
         assert (
+            nullify_blank_strings,
             strip_whitespace,
             extract_email_local_part,
             periods_to_spaces,

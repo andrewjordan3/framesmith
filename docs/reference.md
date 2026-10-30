@@ -85,6 +85,8 @@ own subpackage.
 - [Schema](#schema)
 - [Canonicalize](#canonicalize)
 - [Defaults and types](#defaults-and-types)
+  - [Default constants](#default-constants)
+  - [Type aliases](#type-aliases)
 
 ---
 
@@ -292,11 +294,29 @@ df.with_columns(compose_column('text', UNICODE_TO_ASCII))
 #### `EMAIL_TO_DISPLAY_NAME`
 
 Derives a human-readable display name from an email address: takes the part
-before the `@` and turns dots into spaces.
+before the `@` and turns dots into spaces. A blank or whitespace-only value
+becomes null.
 
 ```python
 df.with_columns(compose_column('email', EMAIL_TO_DISPLAY_NAME))
 # 'john.doe@example.com'  ->  'john doe'
+```
+
+#### `EMAIL_TO_TITLE_NAME`
+
+Derives a Title Case display name from an email address, modeled on the
+BigQuery `INITCAP(REGEXP_EXTRACT(...))` report expression: strictly extracts
+the local part before the first `@` (a value with no `@`, or an empty local
+part, becomes null instead of passing through), replaces each run of `.`,
+`_`, or `-` separators with a single space, then title-cases. Title casing is
+polars `to_titlecase`, which is not byte-identical to BigQuery `INITCAP` on
+two rare cosmetic cases: an intra-word capital's tail is lowercased
+(`'mcdonald'` gives `'Mcdonald'`, not `'McDonald'`), and a letter right after
+a digit is capitalized (`'2pac'` gives `'2Pac'`).
+
+```python
+df.with_columns(compose_column('email', EMAIL_TO_TITLE_NAME))
+# 'john.doe@example.com'  ->  'John Doe'   ;   'not-an-email'  ->  None
 ```
 
 #### `SNAKE_CASE_TO_TITLE`
@@ -308,6 +328,20 @@ to fix specific tokens.)
 ```python
 df.with_columns(compose_column('field', SNAKE_CASE_TO_TITLE))
 # 'john_smith'  ->  'John Smith'
+```
+
+#### `UPPERCASE_CODE_NORMALIZE`
+
+Canonicalizes an identifier code (VIN, license plate, asset tag) to the one
+form a pipeline joins on: NFKC-normalizes (fullwidth and other compatibility
+look-alikes fold to ASCII), tidies whitespace and drops blanks to null,
+uppercases, then nulls the `'?'` placeholder that stands in for an unknown
+code. On a clean code the result is exactly `UPPER(TRIM(code))`, so it joins
+byte-for-byte against a SQL `UPPER(TRIM(...))` key.
+
+```python
+df.with_columns(compose_column('code', UPPERCASE_CODE_NORMALIZE))
+# '  ab-123 '  ->  'AB-123'   ;   '?'  ->  None
 ```
 
 ---
@@ -371,6 +405,18 @@ Lowercases every character. Passed directly in a transform list (no call).
 ```python
 df.with_columns(compose_column('s', [to_lowercase]))
 # 'Hello World'  ->  'hello world'
+```
+
+#### `to_uppercase`
+
+Uppercases every character. The mirror of `to_lowercase`; on plain-ASCII
+input it agrees with SQL `UPPER(...)`, so it is the case step for
+canonicalizing identifier codes to a single join form. Passed directly in a
+transform list (no call).
+
+```python
+df.with_columns(compose_column('s', [to_uppercase]))
+# 'Hello World'  ->  'HELLO WORLD'
 ```
 
 #### `to_titlecase`
@@ -464,6 +510,19 @@ list (no call).
 ```python
 df.with_columns(compose_column('s', [underscores_to_spaces]))
 # 'john_smith'  ->  'john smith'
+```
+
+#### `separators_to_space`
+
+Replaces each run of `.`, `_`, or `-` separators with a single space, like
+SQL `REGEXP_REPLACE(text, '[._-]+', ' ')`: mixed or repeated separators
+collapse to one space. Distinct from `periods_to_spaces` and
+`underscores_to_spaces`, which rewrite one character at a time without
+collapsing runs. Passed directly in a transform list (no call).
+
+```python
+df.with_columns(compose_column('s', [separators_to_space]))
+# 'jane..doe'  ->  'jane doe'   ;   'a._-b'  ->  'a b'
 ```
 
 #### `apply_replacements(replacements)`
@@ -598,6 +657,19 @@ df.with_columns(compose_column('email', [extract_email_local_part]))
 # 'john.doe@example.com'  ->  'john.doe'
 ```
 
+#### `extract_email_local_part_strict`
+
+Strict counterpart to `extract_email_local_part`: captures the run before
+the first `@` only from a well-formed address, like SQL
+`REGEXP_EXTRACT(email, '^([^@]+)@')`. A value with no `@`, or a leading `@`
+(empty local part), becomes null instead of passing through or yielding an
+empty string. Passed directly in a transform list (no call).
+
+```python
+df.with_columns(compose_column('email', [extract_email_local_part_strict]))
+# 'john.doe@example.com'  ->  'john.doe'   ;   'not-an-email'  ->  None
+```
+
 ### Addresses
 
 #### `standardize_directionals(directional_map=DEFAULT_DIRECTIONAL_MAP)`
@@ -716,7 +788,8 @@ df.with_columns(compose_column(
 ### Outliers
 
 Each outlier transform produces a boolean column (true = outlier); a null input
-yields a null flag, and a constant column flags nothing.
+yields a null flag, a nan input is treated like a null (excluded from the
+statistics and given a null flag), and a constant column flags nothing.
 
 #### `flag_zscore_outliers(threshold=3.0)`
 
@@ -865,7 +938,7 @@ completeness from the data (the column's max date), not today's calendar date.
 #### `within_complete_period(date_column, period, threshold_days)`
 
 Keeps rows in "complete" trailing time periods and drops a trailing period that
-ends more than `threshold_days` before the data's last date. `period` is one of
+ends more than `threshold_days` after the data's last date. `period` is one of
 `'1d'`, `'1w'`, `'1mo'`, `'1q'`, `'1y'`.
 
 ```python
@@ -965,8 +1038,11 @@ df.group_by(['id']).agg(mode_then_first_per_group(['id']))
 For `df.with_columns(...)`: fills a numeric column's nulls with a per-group
 center. `strategy='auto'` picks mean vs median from the column's overall skew;
 `'mean'`/`'median'` force it. A group with no non-null value keeps its nulls.
+Nan is treated like null when computing the center, so a group containing a
+nan still fills from its finite values; nan values themselves are left as-is.
 Output is `Float64`; a non-numeric column raises. Raises `ValueError` for empty
-`group_columns`, an unknown strategy, or a non-positive `skew_threshold`.
+`group_columns`, an unknown strategy, or (only when `strategy='auto'`) a
+non-positive `skew_threshold`.
 
 ```python
 df.with_columns(fill_null_numeric_by_group('amount', ['region']))
@@ -1080,6 +1156,13 @@ removes by default.
 
 The 8 generational/professional suffix tokens (jr, sr, ii–iv, esq) that
 `strip_name_suffixes` removes by default.
+
+#### `DEFAULT_PLACEHOLDER_SENTINELS`
+
+The placeholder set `{'?'}` that stands in for an unknown identifier or
+code. Unlike the word-form missing sentinels, `'?'` is never a valid VIN,
+plate, or asset code, so `UPPERCASE_CODE_NORMALIZE` nulls it by default;
+pass your own set to `nullify_sentinels` for other placeholders.
 
 #### `DEFAULT_SPLIT_DELIMITERS`
 

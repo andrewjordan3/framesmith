@@ -259,11 +259,13 @@ PERCENT_STRING_TO_FRACTION: tuple[ExpressionTransform, ...] = (
 
 # --- Label conversions ---
 
-# Derive a human-readable display name from an email address: strip surrounding
-# whitespace, take the local part (before the first '@'), turn periods into
-# spaces, and collapse the resulting whitespace. 'john.doe@example.com' ->
-# 'john doe'.
+# Derive a human-readable display name from an email address: coerce a blank
+# or whitespace-only value to null (the module guarantee for every
+# whitespace-touching recipe), strip surrounding whitespace, take the local
+# part (before the first '@'), turn periods into spaces, and collapse the
+# resulting whitespace. 'john.doe@example.com' -> 'john doe'.
 EMAIL_TO_DISPLAY_NAME: tuple[ExpressionTransform, ...] = (
+    nullify_blank_strings,
     strip_whitespace,
     extract_email_local_part,
     periods_to_spaces,

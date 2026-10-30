@@ -1,6 +1,8 @@
 # tests/group/test_fill.py
 """Tests for the group-wise null fillers in ``framesmith.group.fill``."""
 
+import math
+
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
@@ -69,6 +71,41 @@ class TestFillNullNumericByGroup:
             fill_null_numeric_by_group('v', ['g'], strategy='mean')
         )
         assert out['v'].to_list() == [10.0, 10.0, None]
+
+    @pytest.mark.parametrize(
+        'strategy', ['mean', 'median', 'auto']
+    )
+    def test_nan_in_group_does_not_poison_the_fill(
+        self, strategy: str
+    ) -> None:
+        # Regression (logic audit): the group statistic propagated the
+        # nan, so the null was "filled" with nan. The statistic now
+        # runs over the non-nan values ([10.0] here), and the nan data
+        # value itself is preserved, not rewritten.
+        df = pl.DataFrame(
+            {'g': [1, 1, 1], 'v': [10.0, float('nan'), None]},
+            schema={'g': pl.Int64, 'v': pl.Float64},
+        )
+        out = df.with_columns(
+            fill_null_numeric_by_group('v', ['g'], strategy=strategy)  # type: ignore[arg-type]
+        )
+        result = out['v'].to_list()
+        assert result[0] == 10.0
+        assert math.isnan(result[1])  # the nan row stays nan
+        assert result[2] == 10.0
+
+    def test_all_nan_group_stays_null(self) -> None:
+        df = pl.DataFrame(
+            {'g': [1, 1, 2], 'v': [float('nan'), None, 5.0]},
+            schema={'g': pl.Int64, 'v': pl.Float64},
+        )
+        out = df.with_columns(
+            fill_null_numeric_by_group('v', ['g'], strategy='mean')
+        )
+        result = out['v'].to_list()
+        assert math.isnan(result[0])  # nan preserved
+        assert result[1] is None
+        assert result[2] == 5.0
 
     def test_numeric_string_is_accepted(self) -> None:
         # String dtype holding numeric text: the strict cast succeeds.
