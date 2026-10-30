@@ -10,7 +10,7 @@ from the directory, not from individual files.
 
 import logging
 
-from framesmith.compose import compose_column
+from framesmith.compose import compose_column, compose_columns
 from framesmith.recipes import (
     CATEGORY_CANONICALIZE,
     CATEGORY_CANONICALIZE_TO_SNAKE_CASE,
@@ -54,6 +54,7 @@ __all__: list[str] = [
     'WHITESPACE_CANONICALIZE',
     'ExpressionTransform',
     'compose_column',
+    'compose_columns',
 ]
 
 # Library convention (Python logging HOWTO): attach a NullHandler so that

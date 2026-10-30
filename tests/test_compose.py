@@ -1,5 +1,6 @@
 # tests/test_compose.py
-"""Tests for ``framesmith.compose.compose_column``.
+"""Tests for ``framesmith.compose`` (``compose_column`` and
+``compose_columns``).
 
 These tests use inline, module-level transforms only. They do not
 import from ``framesmith.transforms`` or ``framesmith.recipes`` — the
@@ -15,7 +16,11 @@ from polars.testing import assert_frame_equal, assert_series_equal
 
 import framesmith
 import framesmith.types
-from framesmith import ExpressionTransform, compose_column
+from framesmith import (
+    ExpressionTransform,
+    compose_column,
+    compose_columns,
+)
 
 # ---------------------------------------------------------------------
 # Test-only transforms (named functions, no lambdas)
@@ -286,3 +291,93 @@ class TestPublicReExports:
         self,
     ) -> None:
         assert framesmith.types.ExpressionTransform is ExpressionTransform
+
+
+# ---------------------------------------------------------------------
+# compose_columns: many columns in one call
+# ---------------------------------------------------------------------
+
+
+class TestComposeColumns:
+    def test_applies_each_columns_recipe(self) -> None:
+        df = pl.DataFrame(
+            {'name': ['  alice  '], 'city': ['  CHICAGO  ']}
+        )
+        result = df.with_columns(
+            compose_columns(
+                {
+                    'name': [strip_whitespace],
+                    'city': [strip_whitespace, to_lowercase],
+                }
+            )
+        )
+        assert result['name'].to_list() == ['alice']
+        assert result['city'].to_list() == ['chicago']
+
+    def test_same_recipe_for_many_columns(self) -> None:
+        df = pl.DataFrame({'a': ['  x '], 'b': [' y  ']})
+        result = df.with_columns(
+            compose_columns(
+                {'a': [strip_whitespace], 'b': [strip_whitespace]}
+            )
+        )
+        assert result['a'].to_list() == ['x']
+        assert result['b'].to_list() == ['y']
+
+    def test_returns_one_expression_per_column_in_order(self) -> None:
+        expressions = compose_columns(
+            {'b': [strip_whitespace], 'a': [to_lowercase]}
+        )
+        assert len(expressions) == 2
+        df = pl.DataFrame({'a': ['X'], 'b': [' y ']})
+        result = df.with_columns(expressions)
+        assert result['a'].to_list() == ['x']
+        assert result['b'].to_list() == ['y']
+
+    def test_empty_mapping_raises_value_error(self) -> None:
+        with pytest.raises(
+            ValueError, match='column_recipes must not be empty'
+        ):
+            compose_columns({})
+
+    def test_empty_recipe_for_a_column_raises_value_error(self) -> None:
+        with pytest.raises(
+            ValueError, match='expression_transforms must not be empty'
+        ):
+            compose_columns({'name': []})
+
+    def test_lazy_matches_eager(self) -> None:
+        df = pl.DataFrame({'name': ['  Alice  '], 'id': [1]})
+        expressions = compose_columns(
+            {'name': [strip_whitespace, to_lowercase]}
+        )
+        eager_result = df.with_columns(expressions)
+        lazy_result = df.lazy().with_columns(expressions).collect()
+        assert_frame_equal(eager_result, lazy_result)
+
+    def test_compose_columns_importable_from_top_level(self) -> None:
+        assert framesmith.compose_columns is compose_columns
+
+
+# ---------------------------------------------------------------------
+# Non-sequence recipes: the bare-transform mistake
+# ---------------------------------------------------------------------
+
+
+class TestNonSequenceRecipe:
+    def test_bare_transform_raises_type_error_with_fix(self) -> None:
+        with pytest.raises(TypeError, match='wrap a single transform'):
+            compose_column(  # type: ignore[arg-type]
+                'name', strip_whitespace
+            )
+
+    def test_bare_transform_in_compose_columns_raises(self) -> None:
+        with pytest.raises(TypeError, match='wrap a single transform'):
+            compose_columns(  # type: ignore[arg-type]
+                {'name': strip_whitespace}
+            )
+
+    def test_generator_recipe_raises_type_error(self) -> None:
+        generator = (transform for transform in [strip_whitespace])
+        with pytest.raises(TypeError, match='sequence of transforms'):
+            compose_column('name', generator)  # type: ignore[arg-type]

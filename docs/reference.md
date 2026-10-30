@@ -8,7 +8,8 @@ source and its docstrings.
 framesmith is built around two usage patterns.
 
 **Column transforms and recipes** are applied through `compose_column` inside
-`df.with_columns(...)`. A *recipe* (an ordered bundle of transforms) is passed
+`df.with_columns(...)`, or through `compose_columns` when several columns each
+have a recipe and should be composed in one call. A *recipe* (an ordered bundle of transforms) is passed
 directly; a one-off list of transforms is passed in a list:
 
 ```python
@@ -46,9 +47,9 @@ df = df.with_columns(combine_columns(['first', 'last'], 'full_name'))
 ```
 
 Import paths mirror this document: the top level (`from framesmith import ...`)
-exposes `compose_column`, `ExpressionTransform`, and the 16 recipes; the 56
-transforms live on `framesmith.transforms`; each specialized family lives on its
-own subpackage.
+exposes `compose_column`, `compose_columns`, `ExpressionTransform`, and the
+18 recipes; the 54 transforms live on `framesmith.transforms`; each
+specialized family lives on its own subpackage.
 
 ---
 
@@ -74,6 +75,8 @@ own subpackage.
   - [Dates](#dates)
   - [Outliers](#outliers)
   - [Bounds](#bounds)
+  - [Scaling](#scaling)
+  - [Binning](#binning)
   - [Categorical](#categorical)
   - [Missing](#missing)
   - [Split](#split)
@@ -102,6 +105,21 @@ df.with_columns(compose_column('name', [strip_whitespace, to_lowercase]))
 # '  Alice  '  ->  'alice'
 df.with_columns(compose_column('d', [flag_dates_outside_range(upper=today)],
                                output_column_name='d_is_future'))
+```
+
+#### `compose_columns(column_recipes)`
+
+The multi-column counterpart: pass a mapping of column name to recipe and get
+back a list of expressions, one per column, ready for a single
+`df.with_columns(...)` or `lf.with_columns(...)` call. Each column is composed
+exactly as `compose_column` would compose it, in place and in mapping order.
+Raises `ValueError` if the mapping is empty or any column's recipe is empty.
+
+```python
+df.with_columns(compose_columns({
+    'name': TEXT_NORMALIZE,
+    'amount': NUMERIC_STRING_TO_FLOAT,
+}))
 ```
 
 #### `ExpressionTransform`
@@ -314,7 +332,7 @@ df.with_columns(compose_column('field', SNAKE_CASE_TO_TITLE))
 
 ## Transforms
 
-The 56 atomic transforms on `framesmith.transforms`. A **plain** transform is
+The 54 atomic transforms on `framesmith.transforms`. A **plain** transform is
 passed directly in the transform list. A **factory** transform is called first
 to configure it, then the result goes in the list. Unless noted, every transform
 leaves nulls as null.
@@ -774,6 +792,65 @@ preserved. Raises `ValueError` unless `0 ≤ lower_quantile < upper_quantile ≤
 ```python
 df.with_columns(compose_column('x', [winsorize_numeric()]))
 # a value above the 95th percentile  ->  the 95th-percentile value
+```
+
+### Scaling
+
+Scaling statistics are computed over the whole column at execution, so these
+transforms fit on whatever frame they run against; there is no fitted state.
+All arithmetic is in `Float64` (inputs are cast first), and non-finite values
+are never rewritten to plausible-looking numbers: a nan or infinite value
+propagates as nan, as described per transform below.
+
+#### `zscore_numeric`
+
+Standardizes to mean 0 and sample standard deviation 1: `(x - mean) / std`.
+Output is `Float64`. A constant column maps to 0.0; a single non-null value
+maps to null (no sample standard deviation exists); nulls stay null. A nan or
+infinite value poisons the statistics, so the whole result is nan.
+
+```python
+df.with_columns(compose_column('x', [zscore_numeric]))
+# [1.0, 2.0, 3.0]  ->  [-1.0, 0.0, 1.0]
+```
+
+#### `minmax_numeric`
+
+Scales linearly into [0, 1]: `(x - min) / (max - min)`. Output is `Float64`.
+A constant column (including a single value) maps to 0.0; nulls stay null.
+A nan value stays nan while the finite values still scale; an infinite value
+maps to nan and the finite values to 0.0.
+
+```python
+df.with_columns(compose_column('x', [minmax_numeric]))
+# [10.0, 20.0, 30.0]  ->  [0.0, 0.5, 1.0]
+```
+
+#### `log1p_numeric`
+
+Applies `log(1 + x)`, the reshaping for right-skewed counts and amounts.
+Output is `Float64`. The domain is non-negative: a negative value becomes
+null instead of a nan; nulls stay null; nan stays nan and infinity stays
+infinite.
+
+```python
+df.with_columns(compose_column('x', [log1p_numeric]))
+# 0.0  ->  0.0   ;   3.0  ->  1.386294   ;   -2.0  ->  None
+```
+
+### Binning
+
+#### `bin_by_edges(edges)`
+
+Bins a numeric column at caller-supplied edges and returns the `Int64` bin
+index, from 0 to `len(edges)`. Bins are lower-inclusive: with edges
+`[18, 65]`, 18 opens bin 1 and 65 opens bin 2. Nulls are never binned and stay
+null. Raises `ValueError` if `edges` is empty, non-finite, or not strictly
+increasing.
+
+```python
+df.with_columns(compose_column('age', [bin_by_edges([18.0, 65.0])]))
+# [5.0, 18.0, 35.0, 70.0]  ->  [0, 1, 1, 2]
 ```
 
 ### Categorical

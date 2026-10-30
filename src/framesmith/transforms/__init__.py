@@ -19,6 +19,7 @@ from framesmith.transforms.addresses import (
     standardize_unit_markers,
     strip_trailing_state,
 )
+from framesmith.transforms.binning import bin_by_edges
 from framesmith.transforms.bounds import (
     clip_numeric,
     winsorize_numeric,
@@ -70,6 +71,11 @@ from framesmith.transforms.outliers import (
     flag_zscore_outliers,
 )
 from framesmith.transforms.pad import pad_left
+from framesmith.transforms.scaling import (
+    log1p_numeric,
+    minmax_numeric,
+    zscore_numeric,
+)
 from framesmith.transforms.split import (
     DEFAULT_SPLIT_DELIMITERS,
     split_on_delimiters,
@@ -107,6 +113,7 @@ __all__: list[str] = [
     'EpochTimeUnit',
     'accounting_parens_to_negative',
     'apply_replacements',
+    'bin_by_edges',
     'cast_to_float64',
     'clip_numeric',
     'collapse_keep_top_n',
@@ -120,7 +127,9 @@ __all__: list[str] = [
     'flag_mad_outliers',
     'flag_zscore_outliers',
     'fold_to_ascii',
+    'log1p_numeric',
     'map_categories',
+    'minmax_numeric',
     'normalize_epoch_timestamps',
     'normalize_excel_serial_dates',
     'normalize_unicode_nfkc',
@@ -155,4 +164,5 @@ __all__: list[str] = [
     'trailing_minus_to_prefix',
     'underscores_to_spaces',
     'winsorize_numeric',
+    'zscore_numeric',
 ]

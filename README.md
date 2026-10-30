@@ -142,6 +142,21 @@ and aliases the result back to the source column name (or to
 `output_column_name` if given). An empty transform sequence raises
 `ValueError` immediately — silent no-ops hide bugs.
 
+Its multi-column counterpart, `compose_columns`, takes a mapping of
+column name to recipe and returns the list of expressions for one
+`with_columns` call, still expressions all the way down:
+
+```python
+cleaned = raw.with_columns(
+    fs.compose_columns(
+        {
+            'customer_name': fs.TEXT_NORMALIZE,
+            'amount': fs.NUMERIC_STRING_TO_FLOAT,
+        }
+    )
+)
+```
+
 ### Factories (configured transforms)
 
 When configuration is genuinely data-dependent — for example, which strings

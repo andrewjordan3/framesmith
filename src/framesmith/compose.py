@@ -8,13 +8,13 @@ purely on expressions; this function handles the ``pl.col(...)`` opening
 and the ``.alias(...)`` closing, applying transforms in between.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import polars as pl
 
 from framesmith.types import ExpressionTransform
 
-__all__: list[str] = ['compose_column']
+__all__: list[str] = ['compose_column', 'compose_columns']
 
 
 def compose_column(
@@ -40,6 +40,10 @@ def compose_column(
         A composed ``pl.Expr`` aliased to the output column name.
 
     Raises:
+        TypeError: If ``expression_transforms`` is not a sequence of
+            transforms, for example a single bare transform function.
+            The message names the fix, because this is the most common
+            calling mistake: wrap the transform in a list.
         ValueError: If ``expression_transforms`` is empty. An empty
             sequence would produce an identity expression, which is
             almost certainly a bug (forgotten transforms, empty config
@@ -68,6 +72,14 @@ def compose_column(
         │ bob   │
         └───────┘
     """
+    if callable(expression_transforms) or not isinstance(
+        expression_transforms, Sequence
+    ):
+        raise TypeError(
+            'expression_transforms must be a sequence of transforms '
+            '(a list, tuple, or recipe), not a single transform; '
+            'wrap a single transform in a list, e.g. [transform]'
+        )
     if len(expression_transforms) == 0:
         raise ValueError('expression_transforms must not be empty')
 
@@ -75,3 +87,63 @@ def compose_column(
     for transform in expression_transforms:
         current_expression = transform(current_expression)
     return current_expression.alias(output_column_name or source_column_name)
+
+
+def compose_columns(
+    column_recipes: Mapping[str, Sequence[ExpressionTransform]],
+) -> list[pl.Expr]:
+    """Compose one recipe per column into a list of expressions.
+
+    The multi-column counterpart of ``compose_column``: give it a
+    mapping of column name to the recipe (or ad-hoc transform list)
+    for that column, and pass the returned list straight to
+    ``df.with_columns(...)`` or ``lf.with_columns(...)``. Each column
+    is composed by ``compose_column`` with its default in-place
+    aliasing, in the mapping's order, so the result is exactly the
+    expressions a caller would have built one call at a time. Nothing
+    is executed here; the list is expressions all the way down, so it
+    runs eagerly or lazily like any other framesmith composition.
+
+    Args:
+        column_recipes: Mapping of source column name to its ordered
+            transform sequence. Must be non-empty, and each sequence
+            must be non-empty (enforced by ``compose_column``).
+
+    Returns:
+        One composed ``pl.Expr`` per mapping entry, in mapping order.
+
+    Raises:
+        ValueError: If ``column_recipes`` is empty, or if any column's
+            transform sequence is empty.
+        TypeError: If any column's value is not a sequence of
+            transforms (enforced by ``compose_column``).
+
+    Example:
+        >>> import polars as pl
+        >>> import framesmith as fs
+        >>> df = pl.DataFrame(
+        ...     {'name': ['  ALICE '], 'city': ['  Chicago ']}
+        ... )
+        >>> df.with_columns(
+        ...     fs.compose_columns(
+        ...         {
+        ...             'name': fs.TEXT_CANONICALIZE,
+        ...             'city': fs.TEXT_CANONICALIZE,
+        ...         }
+        ...     )
+        ... )
+        shape: (1, 2)
+        ┌───────┬─────────┐
+        │ name  ┆ city    │
+        │ ---   ┆ ---     │
+        │ str   ┆ str     │
+        ╞═══════╪═════════╡
+        │ ALICE ┆ Chicago │
+        └───────┴─────────┘
+    """
+    if len(column_recipes) == 0:
+        raise ValueError('column_recipes must not be empty')
+    return [
+        compose_column(column_name, recipe)
+        for column_name, recipe in column_recipes.items()
+    ]
