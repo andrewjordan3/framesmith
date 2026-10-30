@@ -40,6 +40,10 @@ def compose_column(
         A composed ``pl.Expr`` aliased to the output column name.
 
     Raises:
+        TypeError: If ``expression_transforms`` is not a sequence of
+            transforms, for example a single bare transform function.
+            The message names the fix, because this is the most common
+            calling mistake: wrap the transform in a list.
         ValueError: If ``expression_transforms`` is empty. An empty
             sequence would produce an identity expression, which is
             almost certainly a bug (forgotten transforms, empty config
@@ -68,6 +72,14 @@ def compose_column(
         │ bob   │
         └───────┘
     """
+    if callable(expression_transforms) or not isinstance(
+        expression_transforms, Sequence
+    ):
+        raise TypeError(
+            'expression_transforms must be a sequence of transforms '
+            '(a list, tuple, or recipe), not a single transform; '
+            'wrap a single transform in a list, e.g. [transform]'
+        )
     if len(expression_transforms) == 0:
         raise ValueError('expression_transforms must not be empty')
 
@@ -103,6 +115,8 @@ def compose_columns(
     Raises:
         ValueError: If ``column_recipes`` is empty, or if any column's
             transform sequence is empty.
+        TypeError: If any column's value is not a sequence of
+            transforms (enforced by ``compose_column``).
 
     Example:
         >>> import polars as pl

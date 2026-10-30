@@ -43,8 +43,8 @@ def bin_by_edges(edges: Sequence[float]) -> ExpressionTransform:
         An ``ExpressionTransform`` for ``compose_column``.
 
     Raises:
-        ValueError: If ``edges`` is empty, contains a non-finite
-            value, or is not strictly increasing.
+        ValueError: If ``edges`` is empty, contains a non-numeric or
+            non-finite value, or is not strictly increasing.
 
     Example:
         >>> import polars as pl
@@ -58,6 +58,11 @@ def bin_by_edges(edges: Sequence[float]) -> ExpressionTransform:
     """
     if len(edges) == 0:
         raise ValueError('edges must not be empty')
+    if any(
+        isinstance(edge, bool) or not isinstance(edge, (int, float))
+        for edge in edges
+    ):
+        raise ValueError('edges must be real numbers')
     if any(not math.isfinite(edge) for edge in edges):
         raise ValueError('edges must be finite')
     if any(following <= current for current, following in itertools.pairwise(edges)):

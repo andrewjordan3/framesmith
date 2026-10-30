@@ -81,3 +81,14 @@ class TestBinByEdgesValidation:
     def test_non_finite_edges_raise(self, edges: list[float]) -> None:
         with pytest.raises(ValueError, match='finite'):
             bin_by_edges(edges)
+
+    @pytest.mark.parametrize(
+        'edges',
+        [['a', 'b'], [None], [True, 2.0]],
+        ids=['strings', 'none', 'bool'],
+    )
+    def test_non_numeric_edges_raise_value_error(
+        self, edges: list[object]
+    ) -> None:
+        with pytest.raises(ValueError, match='real numbers'):
+            bin_by_edges(edges)  # type: ignore[arg-type]

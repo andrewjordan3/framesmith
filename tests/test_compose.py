@@ -357,3 +357,27 @@ class TestComposeColumns:
 
     def test_compose_columns_importable_from_top_level(self) -> None:
         assert framesmith.compose_columns is compose_columns
+
+
+# ---------------------------------------------------------------------
+# Non-sequence recipes: the bare-transform mistake
+# ---------------------------------------------------------------------
+
+
+class TestNonSequenceRecipe:
+    def test_bare_transform_raises_type_error_with_fix(self) -> None:
+        with pytest.raises(TypeError, match='wrap a single transform'):
+            compose_column(  # type: ignore[arg-type]
+                'name', strip_whitespace
+            )
+
+    def test_bare_transform_in_compose_columns_raises(self) -> None:
+        with pytest.raises(TypeError, match='wrap a single transform'):
+            compose_columns(  # type: ignore[arg-type]
+                {'name': strip_whitespace}
+            )
+
+    def test_generator_recipe_raises_type_error(self) -> None:
+        generator = (transform for transform in [strip_whitespace])
+        with pytest.raises(TypeError, match='sequence of transforms'):
+            compose_column('name', generator)  # type: ignore[arg-type]
