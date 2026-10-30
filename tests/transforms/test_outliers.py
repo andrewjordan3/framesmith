@@ -210,3 +210,61 @@ class TestFlagMadOutliers:
         eager = df.with_columns(expr)
         lazy = df.lazy().with_columns(expr).collect()
         assert_frame_equal(eager, lazy)
+
+
+# ---------------------------------------------------------------------
+# NaN handling: nan is treated exactly like null by all three factories
+# ---------------------------------------------------------------------
+
+
+class TestNanHandling:
+    """Regression tests from the logic audit: before the fix, one nan
+    made z-score flag nothing, IQR flag the nan row True, and MAD flag
+    it False. Now the statistics run over the non-nan values and the
+    nan row's flag is null, consistently for all three."""
+
+    def test_zscore_detects_outlier_despite_nan(self) -> None:
+        values = [10.0] * 20 + [50.0, float('nan')]
+        flags = _flag(values, flag_zscore_outliers())
+        assert flags[-2] is True
+        assert all(flag is False for flag in flags[:-2])
+        assert flags[-1] is None
+
+    def test_iqr_detects_outlier_despite_nan(self) -> None:
+        flags = _flag(
+            [1.0, 2.0, 3.0, 100.0, float('nan')], flag_iqr_outliers()
+        )
+        assert flags == [False, False, False, True, None]
+
+    def test_mad_detects_outlier_despite_nan(self) -> None:
+        flags = _flag(
+            [1.0, 2.0, 3.0, 100.0, float('nan')], flag_mad_outliers()
+        )
+        assert flags == [False, False, False, True, None]
+
+    def test_zscore_constant_column_with_nan(self) -> None:
+        flags = _flag(
+            [7.0, 7.0, float('nan')], flag_zscore_outliers()
+        )
+        assert flags == [False, False, None]
+
+    def test_nan_free_regression_values_unchanged(self) -> None:
+        values = [1.0, 2.0, 3.0, 100.0]
+        assert _flag(values, flag_iqr_outliers()) == [
+            False,
+            False,
+            False,
+            True,
+        ]
+        assert _flag(values, flag_mad_outliers()) == [
+            False,
+            False,
+            False,
+            True,
+        ]
+        assert _flag(values, flag_zscore_outliers(threshold=1.0)) == [
+            False,
+            False,
+            False,
+            True,
+        ]

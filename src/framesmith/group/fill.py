@@ -59,6 +59,14 @@ def fill_null_numeric_by_group(
     A group with no non-null value has a null statistic, so its nulls stay
     null — the function never borrows another group's value.
 
+    NaN is treated like null when computing the statistic: the mean,
+    median, and the skew that chooses between them all run over the
+    group's non-nan values, so a group containing a nan still fills
+    its nulls from its finite values, and a group of only nulls and
+    nan fills nothing. NaN values in the column are data, not
+    missingness this function repairs: they are never filled or
+    rewritten.
+
     The column is cast to ``Float64`` (strict), so the output is always
     ``Float64`` and a non-numeric column raises rather than silently
     yielding null statistics. A null fills as null; integer columns widen
@@ -108,8 +116,19 @@ def fill_null_numeric_by_group(
     # raise here. Without it, mean()/median().over() silently return null
     # on a string column and the fill becomes a silent no-op.
     numeric_column: pl.Expr = pl.col(value_column).cast(pl.Float64, strict=True)
-    group_mean: pl.Expr = numeric_column.mean().over(group_columns)
-    group_median: pl.Expr = numeric_column.median().over(group_columns)
+    # Statistics run over a nan-masked copy: polars statistics propagate
+    # nan, so without the mask one nan in a group would make the fill
+    # value nan and "fill" a null with nan, disguising failure as a
+    # completed fill. Masking nan to null makes every statistic a
+    # statistic over the group's non-nan values. The fill below still
+    # targets numeric_column itself, so nan data values are preserved.
+    statistic_column: pl.Expr = (
+        pl.when(numeric_column.is_nan())
+        .then(pl.lit(None, dtype=pl.Float64))
+        .otherwise(numeric_column)
+    )
+    group_mean: pl.Expr = statistic_column.mean().over(group_columns)
+    group_median: pl.Expr = statistic_column.median().over(group_columns)
 
     match strategy:
         case 'mean':
@@ -119,7 +138,7 @@ def fill_null_numeric_by_group(
         case 'auto':
             if skew_threshold <= 0:
                 raise ValueError('skew_threshold must be > 0 for auto strategy')
-            column_skew: pl.Expr = numeric_column.skew()
+            column_skew: pl.Expr = statistic_column.skew()
             # Constant / single-value / all-null columns give NaN or null
             # skew; treat those as "not skewed" and use the mean.
             is_degenerate: pl.Expr = column_skew.is_null() | column_skew.is_nan()

@@ -191,8 +191,8 @@ combine, group, validate, schema, and canonicalize helpers.
 Areas the library may grow into. None of these are commitments.
 
 - A polars/pandas interop layer for bridging legacy pandas pipelines.
-- Frame-level transforms beyond filters (column renaming, schema
-  standardization, multi-column conditionals).
+- Frame-level transforms beyond filters (multi-column conditionals and
+  further schema standardization).
 - "Plans" — a layer above recipes that handles multi-column pipelines as
   units, so a single object can describe an entire frame's preprocessing.
 - Declarative YAML configuration for pipelines.
